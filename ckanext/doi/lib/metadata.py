@@ -5,13 +5,13 @@
 # Created by the Natural History Museum in London, UK
 
 import logging
+import ast
 
 from ckan.lib.helpers import lang as ckan_lang
 from ckan.model import Package
 from ckan.plugins import PluginImplementations, toolkit
 
 from ckanext.doi.interfaces import IDoi
-from ckanext.doi.lib import xml_utils
 from ckanext.doi.lib.errors import DOIMetadataException
 from ckanext.doi.lib.helpers import date_or_none, get_site_url, package_get_year
 
@@ -46,7 +46,26 @@ def build_metadata_dict(pkg_dict):
             errors[key] = e
 
     # CREATORS
-    _add_required('creators', lambda: [{'full_name': pkg_dict.get('author')}])
+    try:
+        creators_list = []
+        # 'literal_eval' is safer than 'eval'
+        auth_list = ast.literal_eval(pkg_dict.get('author'))
+        if type(auth_list) == list:
+            for auth_dict in auth_list:
+                creators_list.append({
+                         # There is no family name or surname in CKAN, but these are supported in DataCite
+                         'name': auth_dict['author_name'],
+                         'nameType': auth_dict['author_name_type'],
+                         'affiliation': [ { 'name': auth_dict['author_affiliation'],
+                                            'affiliationIdentifier': auth_dict['author_affiliation_identifier'],
+                                            'affiliationIdentifierScheme': auth_dict['author_affiliation_identifier_type'], }, ],
+                         # There are only two author identifier fields in CKAN, but many are supported by DataCite
+                         'nameIdentifiers': [ { 'nameIdentifier': auth_dict['author_identifier'],
+                                                'nameIdentifierScheme': auth_dict['author_identifier_type'], }, ],
+                })
+        required['creators'] = creators_list
+    except Exception as e:
+        errors['creators'] = e
 
     # TITLES
     _add_required('titles', lambda: [{'title': pkg_dict.get('title')}])
@@ -73,7 +92,7 @@ def build_metadata_dict(pkg_dict):
         'version': '',
         'rightsList': [],
         'descriptions': [],
-        'geolocations': [],
+        'geoLocations': [],
         'fundingReferences': [],
     }
 
@@ -92,19 +111,27 @@ def build_metadata_dict(pkg_dict):
         errors['subjects'] = e
 
     # CONTRIBUTORS
-    # use the author and maintainer; no splitting or parsing for either
-    # no try/except for this because it's just a simple .get() and if that doesn't work then we
-    # want to know
-    author = pkg_dict.get('author')
-    maintainer = pkg_dict.get('maintainer')
-    if author is not None:
-        optional['contributors'].append(
-            {'contributor_type': 'Researcher', 'full_name': author}
-        )
-    if maintainer is not None:
-        optional['contributors'].append(
-            {'contributor_type': 'DataManager', 'full_name': maintainer}
-        )
+    try:
+        contributors_list = []
+        # 'literal_eval' is safer than 'eval'
+        auth_list = ast.literal_eval(pkg_dict.get('author'))
+        if type(auth_list) == list:
+            for auth_dict in auth_list:
+                contributors_list.append({
+                         # There is no family name or surname in CKAN, but these are supported in DataCite
+                         'name': auth_dict['author_name'],
+                         'contributorType': 'ContactPerson',
+                         'nameType': auth_dict['author_name_type'],
+                         'affiliation': [ { 'name': auth_dict['author_affiliation'],
+                                            'affiliationIdentifier': auth_dict['author_affiliation_identifier'],
+                                            'affiliationIdentifierScheme': auth_dict['author_affiliation_identifier_type'], }, ],
+                         # There are only two author identifier fields in CKAN, but many are supported by DataCite
+                         'nameIdentifiers': [ { 'nameIdentifier': auth_dict['author_identifier'],
+                                                'nameIdentifierScheme': auth_dict['author_identifier_type'], }, ],
+                })
+        optional['contributors'] = contributors_list
+    except Exception as e:
+        errors['contributors'] = e
 
     # DATES
     # created, updated, and doi publish date
@@ -156,7 +183,18 @@ def build_metadata_dict(pkg_dict):
         errors['alternateIdentifiers'] = e
 
     # RELATED IDENTIFIERS
-    # nothing relevant in default schema
+    try:
+        rel_list = ast.literal_eval(pkg_dict.get('related_resource'))
+        if type(rel_list) == list:
+            for rel in rel_list:
+                optional['relatedIdentifiers'].append(
+                            { 'relatedIdentifier': rel['related_resource_url'],
+                              'relatedIdentifierType': 'URL',
+                              'relationType': rel['relation_type'],
+                            })
+    except Exception as e:
+        errors['relatedIdentifiers'] = e
+
 
     # SIZES
     # sum up given sizes from resources in the package and convert from bytes to kilobytes
@@ -189,15 +227,24 @@ def build_metadata_dict(pkg_dict):
 
     # RIGHTS
     # use the package license and get details from CKAN's license register
-    license_id = pkg_dict.get('license_id', 'notspecified')
+    license_id = pkg_dict.get('license_id')
+    if license_id is None:
+        license_id = pkg_dict.get('license', '')
     try:
-        if license_id != 'notspecified' and license_id is not None:
+        if license_id == 'cc-by-4.0-international':
+            optional['rightsList'] = [ {'rightsUri': 'https://spdx.org/licenses/CC-BY-4.0.html',
+                                        'rightsIdentifier': 'CC-BY-4.0',
+                                        'rightsIdentifierScheme': 'SPDX'} ]
+        elif license_id != '' and license_id is not None:
             license_register = Package.get_license_register()
             license = license_register.get(license_id)
             if license is not None:
                 optional['rightsList'] = [
-                    {'url': license.url, 'identifier': license.id}
+                    {'rightsUri': license.url, 'rightsIdentifier': license.id}
                 ]
+        else:
+            optional['rightsList'] = [ {'rights': license_id } ]
+
     except Exception as e:
         errors['rightsList'] = e
 
@@ -208,10 +255,44 @@ def build_metadata_dict(pkg_dict):
     ]
 
     # GEOLOCATIONS
-    # nothing relevant in default schema
+    if pkg_dict.get('location_choice') == 'point':
+        long = pkg_dict.get('point_longitude','')
+        lat = pkg_dict.get('point_latitude','')
+        try:
+            float(long); float(lat)
+        except ValueError as ve:
+            errors['geoLocations'] = ve
+        else:
+            optional['geoLocations'] = [ { 'geoLocationPoint': { 'pointLongitude': long,
+                                                                 'pointLatitude': lat }, }, ]
+
+    elif pkg_dict.get('location_choice') == 'area':
+        try:
+            min_long, min_lat, max_long, max_lat  = pkg_dict.get('bounding_box').split(',')
+            float(min_long); float(min_lat); float(max_long); float(max_lat)
+        except ValueError as ve: 
+            errors['geoLocations'] = ve
+        else:
+            optional['geoLocations'] = [  { 'geoLocationBox': { 'westBoundLongitude' : min_long,
+                                                                'eastBoundLongitude' : max_long,
+                                                                'southBoundLatitude' : min_lat,
+                                                                'northBoundLatitude' : max_lat }, }, ]
 
     # FUNDING
-    # nothing relevant in default schema
+    if pkg_dict.get('funder', '') != '':
+        try:
+            funder_list = ast.literal_eval(pkg_dict.get('funder'))
+            optional['fundingReferences'] = []
+            for funder in funder_list:
+                id_type = funder['funder_identifier_type']
+                # Our API is v4.3 and 'Wikidata' is not supported by v4.3
+                if id_type == 'Wikidata' or id_type == '':
+                    id_type = 'Other'
+                optional['fundingReferences'].append( { 'funderName': funder['funder_name'],
+                                                        'funderIdentifier': funder['funder_identifier'],
+                                                        'funderIdentifierType': id_type } )
+        except Exception as e:
+            errors['fundingReferences'] = e
 
     metadata_dict.update(required)
     metadata_dict.update(optional)
@@ -253,13 +334,13 @@ def build_metadata_dict(pkg_dict):
 
 def build_xml_dict(metadata_dict):
     """
-    Builds a dictionary that can be passed directly to datacite.schema42.tostring() to
+    Builds a dictionary that can be passed directly to datacite.schema43.tostring() to
     generate xml. Previously named metadata_to_xml but renamed as it's not actually
     producing any xml, it's just formatting the metadata so a separate function can then
     generate the xml.
 
     :param metadata_dict: a dict of metadata generated from build_metadata_dict
-    :return: dict that can be passed directly to datacite.schema42.tostring()
+    :return: dict that can be passed directly to datacite.schema43.tostring()
     """
 
     # required fields first (DOI will be added later)
@@ -275,8 +356,7 @@ def build_xml_dict(metadata_dict):
         'schemaVersion': 'http://datacite.org/schema/kernel-4',
     }
 
-    for creator in metadata_dict.get('creators', []):
-        xml_dict['creators'].append(xml_utils.create_contributor(**creator))
+    xml_dict['creators'] = metadata_dict.get('creators', [])
 
     optional = [
         'subjects',
@@ -290,7 +370,7 @@ def build_xml_dict(metadata_dict):
         'version',
         'rightsList',
         'descriptions',
-        'geolocations',
+        'geoLocations',
         'fundingReferences',
     ]
 
@@ -302,13 +382,7 @@ def build_xml_dict(metadata_dict):
             has_value = False
         if not has_value:
             continue
-        if k == 'contributors':
-            xml_dict['contributors'] = []
-            for contributor in v:
-                xml_dict['contributors'].append(
-                    xml_utils.create_contributor(**contributor)
-                )
-        elif k == 'dates':
+        if k == 'dates':
             item = []
             for date_entry in v:
                 date_entry_copy = {k: v for k, v in date_entry.items()}
