@@ -6,6 +6,7 @@
 
 import logging
 import ast
+import datetime
 
 from ckan.lib.helpers import lang as ckan_lang
 from ckan.model import Package
@@ -73,8 +74,13 @@ def build_metadata_dict(pkg_dict):
     # PUBLISHER
     _add_required('publisher', lambda: toolkit.config.get('ckanext.doi.publisher'))
 
-    # PUBLICATION YEAR
-    _add_required('publicationYear', lambda: package_get_year(pkg_dict))
+    # PUBLICATION YEAR - set to the original date when the DOI was minted
+    doi_date_published = pkg_dict.get('doi_date_published')
+    if doi_date_published is None or not doi_date_published[:4].isdecimal():
+        _add_required('publicationYear', lambda: datetime.datetime.now().year)
+    else:
+        # 'doi_date_published' format is 'YYYY-MM-DD'
+        _add_required('publicationYear', lambda: doi_date_published[:4])
 
     # TYPE
     _add_required('resourceType', lambda: pkg_dict.get('type'))
