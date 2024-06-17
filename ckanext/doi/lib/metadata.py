@@ -261,28 +261,34 @@ def build_metadata_dict(pkg_dict):
     ]
 
     # GEOLOCATIONS
-    if pkg_dict.get('location_choice') == 'point':
-        long = pkg_dict.get('point_longitude','')
-        lat = pkg_dict.get('point_latitude','')
-        try:
-            float(long); float(lat)
-        except ValueError as ve:
-            errors['geoLocations'] = ve
-        else:
-            optional['geoLocations'] = [ { 'geoLocationPoint': { 'pointLongitude': long,
-                                                                 'pointLatitude': lat }, }, ]
+    location_choice = pkg_dict.get('location_choice', None)
+    if location_choice is not None:
+        if location_choice == 'point':
+            optional['geoLocations'] = []
+            try:
+                for feat in pkg_dict["location_data"]["features"]:
+                    if feat["geometry"]["type"] == 'Point':
+                        coords = feat["geometry"]["coordinates"]
+                        # Using float() to catch anything that is not a float
+                        optional['geoLocations'].append({ 'geoLocationPoint': { 'pointLongitude': str(float(coords[0])),
+                                                                     'pointLatitude': str(float(coords[1])) }, })
+            except (ValueError, KeyError, IndexError) as e:
+                errors['geoLocations'] = e
 
-    elif pkg_dict.get('location_choice') == 'area':
-        try:
-            min_long, min_lat, max_long, max_lat  = pkg_dict.get('bounding_box').split(',')
-            float(min_long); float(min_lat); float(max_long); float(max_lat)
-        except ValueError as ve: 
-            errors['geoLocations'] = ve
-        else:
-            optional['geoLocations'] = [  { 'geoLocationBox': { 'westBoundLongitude' : min_long,
-                                                                'eastBoundLongitude' : max_long,
-                                                                'southBoundLatitude' : min_lat,
-                                                                'northBoundLatitude' : max_lat }, }, ]
+        elif location_choice == 'area':
+            optional['geoLocations'] = []
+            try:
+                for feat in pkg_dict["location_data"]["features"]:
+                    if feat["geometry"]["type"] == 'Polygon':
+                        coord_list = feat["geometry"]["coordinates"][0]
+                        # Using float() to catch anything that is not a float
+                        optional['geoLocations'].append({ 'geoLocationBox': {
+                                                                'westBoundLongitude' : str(float(coord_list[0][0])),
+                                                                'eastBoundLongitude' : str(float(coord_list[2][0])),
+                                                                'southBoundLatitude' : str(float(coord_list[0][1])),
+                                                                'northBoundLatitude' : str(float(coord_list[1][1])) }, })
+            except (ValueError, KeyError, IndexError) as e:
+                errors['geoLocations'] = e
 
     # FUNDING
     if pkg_dict.get('funder', '') != '':
