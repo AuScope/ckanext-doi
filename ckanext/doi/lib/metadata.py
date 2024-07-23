@@ -354,6 +354,14 @@ def build_xml_dict(metadata_dict):
     :param metadata_dict: a dict of metadata generated from build_metadata_dict
     :return: dict that can be passed directly to datacite.schema43.tostring()
     """
+    if "igsn_theme" in toolkit.config.get('ckan.plugins'):
+        # For Sample Repository resource type is "PhysicalObject"
+        resource_type_general = "PhysicalObject"
+        resource_type = "PhysicalObject"
+    else:
+        # For Data Reposoitory resource type is "Dataset"
+        resource_type_general = "Dataset"
+        resource_type = metadata_dict.get('resourceType')
 
     # required fields first (DOI will be added later)
     xml_dict = {
@@ -362,8 +370,8 @@ def build_xml_dict(metadata_dict):
         'publisher': metadata_dict.get('publisher'),
         'publicationYear': str(metadata_dict.get('publicationYear')),
         'types': {
-            'resourceType': metadata_dict.get('resourceType'),
-            'resourceTypeGeneral': 'Dataset',
+            'resourceType': resource_type,
+            'resourceTypeGeneral': resource_type_general,
         },
         'schemaVersion': 'http://datacite.org/schema/kernel-4',
     }
