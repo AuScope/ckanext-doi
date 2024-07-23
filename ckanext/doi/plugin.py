@@ -86,7 +86,12 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
             client = DataciteClient()
 
             if doi.published is None:
-                # metadata gets created before minting
+                # Set issued date in DOI metadata knowing that it will be minted immediately
+                for d in xml_dict['dates']:
+                    if d['dateType'] == 'Issued':
+                        d['date'] = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S.%f')
+                        break
+                # Metadata gets created before minting
                 client.set_metadata(doi.identifier, xml_dict)
                 client.mint_doi(doi.identifier, package_id)
                 toolkit.h.flash_success('DataCite DOI created')
@@ -110,7 +115,7 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
             pkg_dict['doi_status'] = True if doi.published else False
             pkg_dict['domain'] = get_site_url().replace('http://', '')
             pkg_dict['doi_date_published'] = (
-                datetime.strftime(doi.published, '%Y-%m-%d') if doi.published else None
+                datetime.strftime(doi.published, '%Y-%m-%d %H:%M:%S.%f') if doi.published else None
             )
             pkg_dict['doi_publisher'] = toolkit.config.get('ckanext.doi.publisher')
 
