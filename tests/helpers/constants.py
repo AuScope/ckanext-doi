@@ -74,8 +74,8 @@ PKG_DICT = {
 METADATA_DICT = {
     'fundingReferences': [],
     'contributors': [
-        {'full_name': 'Author, Test', 'contributor_type': 'Researcher'},
-        {'full_name': 'Maintainer, Data', 'contributor_type': 'DataManager'},
+        {'name': 'Author, Test', 'contributorType': 'Researcher', 'nameType': 'Personal'},
+        {'name': 'Maintainer, Data', 'contributorType': 'DataManager', 'nameType': 'Personal'},
     ],
     'geolocations': [],
     'dates': [
@@ -112,26 +112,22 @@ METADATA_DICT = {
     ],
     'version': '1',
     'formats': [],
-    'creators': [{'full_name': 'Author, Test'}],
+    'creators': [{'name': 'Author, Test', 'nameType': 'Personal'}],
 }
 
 # minimal example from https://datacite.readthedocs.io/en/latest
+# Updated for DataCite 4.5 schema
 XML_DICT = {
-    'identifiers': [
-        {
-            'identifierType': 'DOI',
-            'identifier': '10.4124/abcd1234',
-        }
-    ],
+    'doi': '10.4124/abcd1234',
     'creators': [
-        {'name': 'Smith, John'},
+        {'name': 'Smith, John', 'nameType': 'Personal'},
     ],
     'titles': [
         {
             'title': 'Minimal Test Case',
         }
     ],
-    'publisher': 'Invenio Software',
+    'publisher': {'name': 'Invenio Software'},
     'publicationYear': '2015',
     'types': {'resourceType': 'Dataset', 'resourceTypeGeneral': 'Dataset'},
     'schemaVersion': 'http://datacite.org/schema/kernel-4',

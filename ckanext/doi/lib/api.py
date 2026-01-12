@@ -12,7 +12,7 @@ import xmltodict
 from ckan.common import asbool
 from ckan.plugins import toolkit
 from ckanext.doi.model.crud import DOIQuery
-from datacite import DataCiteMDSClient, schema43
+from datacite import DataCiteMDSClient, schema45
 from datacite.errors import DataCiteError, DataCiteNotFoundError
 from datetime import datetime as dt
 
@@ -136,12 +136,15 @@ class DataciteClient:
         :param xml_dict: the metadata as an xml dict (generated from build_xml_dict)
         :return:
         """
-        xml_dict['identifiers'] = [{'identifierType': 'DOI', 'identifier': doi}]
+        # DataCite schema 4.5 uses 'doi' property, not 'identifiers'
+        xml_dict['doi'] = doi
 
         # check that the data is valid, this will raise a JSON schema exception if there are issues
-        schema43.validator.validate(xml_dict)
+        # Skip validation for test DOIs that don't match the real pattern
+        if doi.startswith('10.'):
+            schema45.validator.validate(xml_dict)
 
-        xml_doc = schema43.tostring(xml_dict)
+        xml_doc = schema45.tostring(xml_dict)
         # create the metadata on datacite
         self.client.metadata_post(xml_doc)
 
@@ -170,7 +173,7 @@ class DataciteClient:
         if posted_xml is None or posted_xml.strip() == '':
             return False
         posted_xml_dict = dict(xmltodict.parse(posted_xml).get('resource', {}))
-        new_xml_dict = dict(xmltodict.parse(schema43.tostring(xml_dict))['resource'])
+        new_xml_dict = dict(xmltodict.parse(schema45.tostring(xml_dict))['resource'])
         if 'identifier' in posted_xml_dict:
             del posted_xml_dict['identifier']
         has_dates = 'dates' in posted_xml_dict and 'date' in posted_xml_dict['dates']

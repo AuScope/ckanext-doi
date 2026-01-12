@@ -6,7 +6,7 @@
 
 import pkg_resources
 import pytest
-from datacite import schema42
+from datacite import schema45
 
 from ckanext.doi.lib.metadata import build_metadata_dict, build_xml_dict
 from .helpers import constants
@@ -43,8 +43,11 @@ def test_handles_bad_data():
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Example Publisher')
 def test_generate_xml():
     xml_dict = build_xml_dict(constants.METADATA_DICT)
-    # build_xml_dict does not add a DOI
-    xml_dict['identifiers'] = [
-        {'identifierType': 'DOI', 'identifier': '10.0000/this-would-be-a-doi'}
-    ]
-    assert schema42.validate(xml_dict)
+    # build_xml_dict does not add a DOI - DataCite 4.5 uses 'doi' property
+    xml_dict['doi'] = '10.0000/this-would-be-a-doi'
+    # Validate
+    try:
+        schema45.validator.validate(xml_dict)
+        assert True
+    except Exception:
+        assert False, "Validation failed"

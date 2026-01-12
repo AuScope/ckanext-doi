@@ -1,5 +1,54 @@
 # Changelog
 
+## v4.0.0 (UNRELEASED)
+
+### Breaking Changes
+
+- **MAJOR**: Upgraded from DataCite Metadata Schema v4.3 to v4.5
+- Changed default `resourceTypeGeneral` from "Dataset" to "Instrument" for PIDINST instrument registries
+- Updated datacite Python library dependency from 1.1.2 to >=1.1.3
+
+### Features
+
+- **PIDINST Support**: Implemented PIDINST (Persistent Identification of Instruments) schema mapping
+  - Map `owner` field to DataCite creators (instrument owners/responsible organizations)
+  - Map `manufacturer` field to DataCite contributors with Producer role
+  - Support for `alternate_identifier_obj` (serial numbers, inventory numbers)
+  - Support for `related_identifier_obj` (enhanced relationship types)
+- **Configurable Schema Version**: New config option `ckanext.doi.datacite_schema_version` (default: 4.5)
+- **Configurable Resource Type**: New config option `ckanext.doi.resource_type` (default: Instrument)
+- **DataCite 4.5 Features**:
+  - Native "Instrument" resourceTypeGeneral support
+  - Wikidata identifier support in fundingReferences (no longer restricted)
+  - Enhanced identifier and relation type support
+
+### Backwards Compatibility
+
+- **Legacy Dataset Support**: Automatic fallback to `author` field when `owner`/`manufacturer` not present
+- **Existing DOIs**: All existing DOIs remain valid; metadata can be updated via `doi update-doi` command
+- **Mixed Deployments**: Support for both instrument registries and data repositories in same CKAN instance
+
+### Documentation
+
+- Added comprehensive `MIGRATION_DATACITE_45.md` migration guide
+- Updated README with PIDINST field mapping tables
+- Updated configuration documentation with new options
+- Enhanced code documentation in `metadata.py` with PIDINST mapping details
+
+### Changed
+
+- Updated `build_metadata_dict()` to prioritize PIDINST fields over legacy dataset fields
+- Updated `build_xml_dict()` to support configurable schema version and resource type
+- Modified imports from `schema43` to `schema45` throughout codebase
+- Improved error handling for missing PIDINST fields with graceful fallbacks
+
+### See Also
+
+- [DataCite 4.5 Schema Documentation](https://schema.datacite.org/meta/kernel-4.5/)
+- [PIDINST Schema](https://github.com/rdawg-pidinst/schema)
+
+---
+
 ## v3.1.12 (2024-02-13)
 
 ### Fix

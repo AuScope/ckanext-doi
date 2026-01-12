@@ -23,6 +23,26 @@ def build_metadata_dict(pkg_dict):
     """
     Build/extract a basic dict of metadata that can then be passed to build_xml_dict.
 
+    This function implements PIDINST-based mapping for instrument registries,
+    with fallback support for traditional dataset metadata.
+
+    PIDINST Mapping (primary):
+    - creators: from 'owner' field (organizations responsible for the instrument)
+    - contributors: from 'manufacturer' field (producers of the instrument)
+    - alternateIdentifiers: from 'alternate_identifier_obj' field
+    - relatedIdentifiers: from 'related_identifier_obj' field
+    - types.resourceTypeGeneral: "Instrument" (DataCite 4.5+)
+
+    Legacy Dataset Mapping (fallback for backwards compatibility):
+    - creators/contributors: from 'author' field
+    - relatedIdentifiers: from 'related_resource' field
+    - types.resourceTypeGeneral: "Dataset"
+
+    Configuration:
+    - ckanext.doi.datacite_schema_version: DataCite schema version (default: 4.5)
+    - ckanext.doi.resource_type: resourceTypeGeneral (default: Instrument)
+    - ckanext.doi.publisher: required publisher name
+
     :param pkg_dict: dict of package details
     """
     metadata_dict = {}
@@ -47,23 +67,80 @@ def build_metadata_dict(pkg_dict):
             errors[key] = e
 
     # CREATORS
+    # For PIDINST instrument schema, map 'owner' field as creators (organizations responsible)
     try:
         creators_list = []
-        # 'literal_eval' is safer than 'eval'
-        auth_list = ast.literal_eval(pkg_dict.get('author'))
-        if type(auth_list) == list:
-            for auth_dict in auth_list:
-                creators_list.append({
-                         # There is no family name or surname in CKAN, but these are supported in DataCite
-                         'name': auth_dict['author_name'],
-                         'nameType': auth_dict['author_name_type'],
-                         'affiliation': [ { 'name': auth_dict['author_affiliation'],
-                                            'affiliationIdentifier': auth_dict['author_affiliation_identifier'],
-                                            'affiliationIdentifierScheme': auth_dict['author_affiliation_identifier_type'], }, ],
-                         # There are only two author identifier fields in CKAN, but many are supported by DataCite
-                         'nameIdentifiers': [ { 'nameIdentifier': auth_dict['author_identifier'],
-                                                'nameIdentifierScheme': auth_dict['author_identifier_type'], }, ],
-                })
+        owner_list = pkg_dict.get('owner', [])
+        if isinstance(owner_list, str):
+            owner_list = ast.literal_eval(owner_list)
+        if isinstance(owner_list, list):
+            for owner_dict in owner_list:
+                creator = {
+                    'name': owner_dict.get('owner_name', ''),
+                    'nameType': 'Organizational',
+                }
+                # Add owner identifier if present
+                if owner_dict.get('owner_identifier'):
+                    creator['nameIdentifiers'] = [{
+                        'nameIdentifier': owner_dict['owner_identifier'],
+                        'nameIdentifierScheme': owner_dict.get('owner_identifier_type', 'Other'),
+                    }]
+                creators_list.append(creator)
+        # Fallback: if no owners, try legacy 'author' field for backwards compatibility
+        if not creators_list:
+            author_value = pkg_dict.get('author')
+            if author_value:
+                # Handle simple string author (legacy format)
+                if isinstance(author_value, str):
+                    # Check if it looks like a list string representation
+                    if author_value.strip().startswith('['):
+                        try:
+                            auth_list = ast.literal_eval(author_value)
+                        except (ValueError, SyntaxError):
+                            # If parsing fails, treat as simple string
+                            auth_list = None
+                    else:
+                        # Simple string like "Author, Test"
+                        auth_list = None
+                    
+                    # If we couldn't parse it as a list, use it as a simple name
+                    if auth_list is None:
+                        creators_list.append({
+                            'name': author_value,
+                            'nameType': 'Personal',
+                        })
+                    else:
+                        # Parsed successfully as list
+                        for auth_dict in auth_list:
+                            creators_list.append({
+                                'name': auth_dict.get('author_name', ''),
+                                'nameType': auth_dict.get('author_name_type', 'Personal'),
+                                'affiliation': [{
+                                    'name': auth_dict.get('author_affiliation', ''),
+                                    'affiliationIdentifier': auth_dict.get('author_affiliation_identifier', ''),
+                                    'affiliationIdentifierScheme': auth_dict.get('author_affiliation_identifier_type', ''),
+                                }] if auth_dict.get('author_affiliation') else [],
+                                'nameIdentifiers': [{
+                                    'nameIdentifier': auth_dict.get('author_identifier', ''),
+                                    'nameIdentifierScheme': auth_dict.get('author_identifier_type', ''),
+                                }] if auth_dict.get('author_identifier') else [],
+                            })
+                elif isinstance(author_value, list):
+                    # Already a list
+                    for auth_dict in author_value:
+                        creators_list.append({
+                            'name': auth_dict.get('author_name', ''),
+                            'nameType': auth_dict.get('author_name_type', 'Personal'),
+                            'affiliation': [{
+                                'name': auth_dict.get('author_affiliation', ''),
+                                'affiliationIdentifier': auth_dict.get('author_affiliation_identifier', ''),
+                                'affiliationIdentifierScheme': auth_dict.get('author_affiliation_identifier_type', ''),
+                            }] if auth_dict.get('author_affiliation') else [],
+                            'nameIdentifiers': [{
+                                'nameIdentifier': auth_dict.get('author_identifier', ''),
+                                'nameIdentifierScheme': auth_dict.get('author_identifier_type', ''),
+                            }] if auth_dict.get('author_identifier') else [],
+                        })
         required['creators'] = creators_list
     except Exception as e:
         errors['creators'] = e
@@ -117,24 +194,84 @@ def build_metadata_dict(pkg_dict):
         errors['subjects'] = e
 
     # CONTRIBUTORS
+    # For PIDINST instrument schema, map 'manufacturer' field as contributors with role 'Producer'
     try:
         contributors_list = []
-        # 'literal_eval' is safer than 'eval'
-        auth_list = ast.literal_eval(pkg_dict.get('author'))
-        if type(auth_list) == list:
-            for auth_dict in auth_list:
-                contributors_list.append({
-                         # There is no family name or surname in CKAN, but these are supported in DataCite
-                         'name': auth_dict['author_name'],
-                         'contributorType': 'ContactPerson',
-                         'nameType': auth_dict['author_name_type'],
-                         'affiliation': [ { 'name': auth_dict['author_affiliation'],
-                                            'affiliationIdentifier': auth_dict['author_affiliation_identifier'],
-                                            'affiliationIdentifierScheme': auth_dict['author_affiliation_identifier_type'], }, ],
-                         # There are only two author identifier fields in CKAN, but many are supported by DataCite
-                         'nameIdentifiers': [ { 'nameIdentifier': auth_dict['author_identifier'],
-                                                'nameIdentifierScheme': auth_dict['author_identifier_type'], }, ],
-                })
+        manufacturer_list = pkg_dict.get('manufacturer', [])
+        if isinstance(manufacturer_list, str):
+            manufacturer_list = ast.literal_eval(manufacturer_list)
+        if isinstance(manufacturer_list, list):
+            for mfr_dict in manufacturer_list:
+                contributor = {
+                    'name': mfr_dict.get('manufacturer_name', ''),
+                    'contributorType': 'Producer',
+                    'nameType': 'Organizational',
+                }
+                # Add manufacturer identifier if present
+                if mfr_dict.get('manufacturer_identifier'):
+                    contributor['nameIdentifiers'] = [{
+                        'nameIdentifier': mfr_dict['manufacturer_identifier'],
+                        'nameIdentifierScheme': mfr_dict.get('manufacturer_identifier_type', 'Other'),
+                    }]
+                contributors_list.append(contributor)
+        # Fallback: legacy author field as ContactPerson for backwards compatibility
+        if not contributors_list:
+            author_value = pkg_dict.get('author')
+            if author_value:
+                # Handle simple string author (legacy format)
+                if isinstance(author_value, str):
+                    # Check if it looks like a list string representation
+                    if author_value.strip().startswith('['):
+                        try:
+                            auth_list = ast.literal_eval(author_value)
+                        except (ValueError, SyntaxError):
+                            # If parsing fails, treat as simple string
+                            auth_list = None
+                    else:
+                        # Simple string like "Author, Test"
+                        auth_list = None
+                    
+                    # If we couldn't parse it as a list, use it as a simple name
+                    if auth_list is None:
+                        contributors_list.append({
+                            'name': author_value,
+                            'contributorType': 'ContactPerson',
+                            'nameType': 'Personal',
+                        })
+                    else:
+                        # Parsed successfully as list
+                        for auth_dict in auth_list:
+                            contributors_list.append({
+                                'name': auth_dict.get('author_name', ''),
+                                'contributorType': 'ContactPerson',
+                                'nameType': auth_dict.get('author_name_type', 'Personal'),
+                                'affiliation': [{
+                                    'name': auth_dict.get('author_affiliation', ''),
+                                    'affiliationIdentifier': auth_dict.get('author_affiliation_identifier', ''),
+                                    'affiliationIdentifierScheme': auth_dict.get('author_affiliation_identifier_type', ''),
+                                }] if auth_dict.get('author_affiliation') else [],
+                                'nameIdentifiers': [{
+                                    'nameIdentifier': auth_dict.get('author_identifier', ''),
+                                    'nameIdentifierScheme': auth_dict.get('author_identifier_type', ''),
+                                }] if auth_dict.get('author_identifier') else [],
+                            })
+                elif isinstance(author_value, list):
+                    # Already a list
+                    for auth_dict in author_value:
+                        contributors_list.append({
+                            'name': auth_dict.get('author_name', ''),
+                            'contributorType': 'ContactPerson',
+                            'nameType': auth_dict.get('author_name_type', 'Personal'),
+                            'affiliation': [{
+                                'name': auth_dict.get('author_affiliation', ''),
+                                'affiliationIdentifier': auth_dict.get('author_affiliation_identifier', ''),
+                                'affiliationIdentifierScheme': auth_dict.get('author_affiliation_identifier_type', ''),
+                            }] if auth_dict.get('author_affiliation') else [],
+                            'nameIdentifiers': [{
+                                'nameIdentifier': auth_dict.get('author_identifier', ''),
+                                'nameIdentifierScheme': auth_dict.get('author_identifier_type', ''),
+                            }] if auth_dict.get('author_identifier') else [],
+                        })
         optional['contributors'] = contributors_list
     except Exception as e:
         errors['contributors'] = e
@@ -179,25 +316,57 @@ def build_metadata_dict(pkg_dict):
         errors['language'] = e
 
     # ALTERNATE IDENTIFIERS
-    # add permalink back to this site
+    # add permalink back to this site, plus PIDINST alternate_identifier_obj if present
     try:
+        alternate_ids = []
         permalink = f'{get_site_url()}/dataset/{pkg_dict["id"]}'
-        optional['alternateIdentifiers'] = [
+        alternate_ids.append(
             {'alternateIdentifierType': 'URL', 'alternateIdentifier': permalink}
-        ]
+        )
+        # Add PIDINST alternate identifiers if present
+        alt_id_list = pkg_dict.get('alternate_identifier_obj', [])
+        if isinstance(alt_id_list, str):
+            alt_id_list = ast.literal_eval(alt_id_list)
+        if isinstance(alt_id_list, list):
+            for alt_dict in alt_id_list:
+                if alt_dict.get('alternate_identifier'):
+                    alternate_ids.append({
+                        'alternateIdentifier': alt_dict['alternate_identifier'],
+                        'alternateIdentifierType': alt_dict.get('alternate_identifier_type', 'Other'),
+                    })
+        optional['alternateIdentifiers'] = alternate_ids
     except Exception as e:
         errors['alternateIdentifiers'] = e
 
     # RELATED IDENTIFIERS
+    # For PIDINST schema, use related_identifier_obj field
     try:
-        rel_list = ast.literal_eval(pkg_dict.get('related_resource'))
-        if type(rel_list) == list:
+        related_ids = []
+        rel_list = pkg_dict.get('related_identifier_obj', [])
+        if isinstance(rel_list, str):
+            rel_list = ast.literal_eval(rel_list)
+        if isinstance(rel_list, list):
             for rel in rel_list:
-                optional['relatedIdentifiers'].append(
-                            { 'relatedIdentifier': rel['related_resource_url'],
-                              'relatedIdentifierType': 'URL',
-                              'relationType': rel['relation_type'],
-                            })
+                if rel.get('related_identifier'):
+                    related_ids.append({
+                        'relatedIdentifier': rel['related_identifier'],
+                        'relatedIdentifierType': rel.get('related_identifier_type', 'URL'),
+                        'relationType': rel.get('relation_type', 'References'),
+                    })
+        # Fallback: legacy related_resource field
+        if not related_ids:
+            rel_list = pkg_dict.get('related_resource', [])
+            if isinstance(rel_list, str):
+                rel_list = ast.literal_eval(rel_list)
+            if isinstance(rel_list, list):
+                for rel in rel_list:
+                    if rel.get('related_resource_url'):
+                        related_ids.append({
+                            'relatedIdentifier': rel['related_resource_url'],
+                            'relatedIdentifierType': 'URL',
+                            'relationType': rel.get('relation_type', 'References'),
+                        })
+        optional['relatedIdentifiers'] = related_ids
     except Exception as e:
         errors['relatedIdentifiers'] = e
 
@@ -291,18 +460,19 @@ def build_metadata_dict(pkg_dict):
                 errors['geoLocations'] = e
 
     # FUNDING
+    # For PIDINST schema, use 'funder' field if present
     if pkg_dict.get('funder', '') != '':
         try:
             funder_list = ast.literal_eval(pkg_dict.get('funder'))
             optional['fundingReferences'] = []
             for funder in funder_list:
-                id_type = funder['funder_identifier_type']
-                # Our API is v4.3 and 'Wikidata' is not supported by v4.3
-                if id_type == 'Wikidata' or id_type == '':
-                    id_type = 'Other'
-                optional['fundingReferences'].append( { 'funderName': funder['funder_name'],
-                                                        'funderIdentifier': funder['funder_identifier'],
-                                                        'funderIdentifierType': id_type } )
+                id_type = funder.get('funder_identifier_type', 'Other')
+                # DataCite 4.5 supports Wikidata and other identifier types
+                funding_ref = {'funderName': funder.get('funder_name', '')}
+                if funder.get('funder_identifier'):
+                    funding_ref['funderIdentifier'] = funder['funder_identifier']
+                    funding_ref['funderIdentifierType'] = id_type
+                optional['fundingReferences'].append(funding_ref)
         except Exception as e:
             errors['fundingReferences'] = e
 
@@ -346,34 +516,50 @@ def build_metadata_dict(pkg_dict):
 
 def build_xml_dict(metadata_dict):
     """
-    Builds a dictionary that can be passed directly to datacite.schema43.tostring() to
+    Builds a dictionary that can be passed directly to datacite.schema45.tostring() to
     generate xml. Previously named metadata_to_xml but renamed as it's not actually
     producing any xml, it's just formatting the metadata so a separate function can then
     generate the xml.
 
     :param metadata_dict: a dict of metadata generated from build_metadata_dict
-    :return: dict that can be passed directly to datacite.schema43.tostring()
+    :return: dict that can be passed directly to datacite.schema45.tostring()
     """
+    # Determine resource type based on CKAN plugins and dataset type
+    # For PIDINST instrument registry, use "Instrument" (DataCite 4.5+)
     if "igsn_theme" in toolkit.config.get('ckan.plugins'):
         # For Sample Repository resource type is "PhysicalObject"
         resource_type_general = "PhysicalObject"
         resource_type = "PhysicalObject"
     else:
-        # For Data Reposoitory resource type is "Dataset"
-        resource_type_general = "Dataset"
-        resource_type = metadata_dict.get('resourceType')
+        # Check if this is an instrument dataset (PIDINST schema)
+        # Default to "Instrument" for instrument registries, fallback to "Dataset"
+        resource_type = metadata_dict.get('resourceType', 'Instrument')
+        # Use config to determine if we're an instrument registry
+        is_instrument = toolkit.config.get('ckanext.doi.resource_type', 'Instrument') == 'Instrument'
+        resource_type_general = "Instrument" if is_instrument else "Dataset"
+
+    # Get schema version from config (default 4.5)
+    schema_version = toolkit.config.get('ckanext.doi.datacite_schema_version', '4.5')
+    schema_url = f'http://datacite.org/schema/kernel-{schema_version.replace(".", "")[0]}'
+
+    # DataCite 4.5+ requires publisher to be an object with 'name' property
+    publisher_value = metadata_dict.get('publisher')
+    if isinstance(publisher_value, str):
+        publisher_value = {'name': publisher_value}
+    elif publisher_value is None:
+        publisher_value = {'name': ''}
 
     # required fields first (DOI will be added later)
     xml_dict = {
         'creators': [],
         'titles': metadata_dict.get('titles', []),
-        'publisher': metadata_dict.get('publisher'),
+        'publisher': publisher_value,
         'publicationYear': str(metadata_dict.get('publicationYear')),
         'types': {
             'resourceType': resource_type,
             'resourceTypeGeneral': resource_type_general,
         },
-        'schemaVersion': 'http://datacite.org/schema/kernel-4',
+        'schemaVersion': schema_url,
     }
 
     xml_dict['creators'] = metadata_dict.get('creators', [])
