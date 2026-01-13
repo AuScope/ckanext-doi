@@ -48,7 +48,7 @@ PIDINST_INSTRUMENT_PKG = {
             'related_identifier_name': 'User Manual'
         }
     ],
-    'notes': 'A broadband seismometer for earthquake monitoring',
+    'description': 'A broadband seismometer for earthquake monitoring',
     'metadata_created': '2024-01-15T10:30:00',
     'metadata_modified': '2024-01-15T10:30:00',
     'tags': [],
@@ -180,7 +180,7 @@ def test_legacy_author_fallback():
                 'author_identifier_type': 'ORCID'
             }
         ],
-        'notes': 'A test dataset',
+        'description': 'A test dataset',
         'metadata_created': '2024-01-15T10:30:00',
         'metadata_modified': '2024-01-15T10:30:00',
         'tags': [],
@@ -239,7 +239,7 @@ def test_missing_optional_pidinst_fields():
             }
         ],
         # No manufacturer, no alternate_identifier_obj, no related_identifier_obj
-        'notes': 'Minimal test',
+        'description': 'Minimal test',
         'metadata_created': '2024-01-15T10:30:00',
         'metadata_modified': '2024-01-15T10:30:00',
         'tags': [],

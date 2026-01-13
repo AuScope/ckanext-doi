@@ -424,9 +424,9 @@ def build_metadata_dict(pkg_dict):
         errors['rightsList'] = e
 
     # DESCRIPTIONS
-    # use package notes
+    # use package description
     optional['descriptions'] = [
-        {'descriptionType': 'Other', 'description': pkg_dict.get('notes', '')}
+        {'descriptionType': 'Other', 'description': pkg_dict.get('description', '')}
     ]
 
     # GEOLOCATIONS
