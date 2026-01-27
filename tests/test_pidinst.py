@@ -59,33 +59,35 @@ PIDINST_INSTRUMENT_PKG = {
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
 @pytest.mark.ckan_config('ckanext.doi.resource_type', 'Instrument')
 def test_pidinst_owner_mapping():
-    """Test that PIDINST 'owner' field maps to DataCite 'creators'"""
-    metadata_dict = build_metadata_dict(PIDINST_INSTRUMENT_PKG)
-    
-    assert 'creators' in metadata_dict
-    assert len(metadata_dict['creators']) == 1
-    
-    creator = metadata_dict['creators'][0]
-    assert creator['name'] == 'Australian National University'
-    assert creator['nameType'] == 'Organizational'
-    assert 'nameIdentifiers' in creator
-    assert creator['nameIdentifiers'][0]['nameIdentifier'] == 'https://ror.org/019wvm592'
-    assert creator['nameIdentifiers'][0]['nameIdentifierScheme'] == 'ROR'
-
-
-@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
-def test_pidinst_manufacturer_mapping():
-    """Test that PIDINST 'manufacturer' field maps to DataCite 'contributors' with Producer type"""
+    """Test that PIDINST 'owner' field maps to DataCite 'contributors' with HostingInstitution type"""
     metadata_dict = build_metadata_dict(PIDINST_INSTRUMENT_PKG)
     
     assert 'contributors' in metadata_dict
     assert len(metadata_dict['contributors']) == 1
     
     contributor = metadata_dict['contributors'][0]
-    assert contributor['name'] == 'Guralp Systems'
-    assert contributor['contributorType'] == 'Producer'
+    assert contributor['name'] == 'Australian National University'
+    assert contributor['contributorType'] == 'HostingInstitution'
     assert contributor['nameType'] == 'Organizational'
     assert 'nameIdentifiers' in contributor
+    assert contributor['nameIdentifiers'][0]['nameIdentifier'] == 'https://ror.org/019wvm592'
+    assert contributor['nameIdentifiers'][0]['nameIdentifierScheme'] == 'ROR'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_manufacturer_mapping():
+    """Test that PIDINST 'manufacturer' field maps to DataCite 'creators'"""
+    metadata_dict = build_metadata_dict(PIDINST_INSTRUMENT_PKG)
+    
+    assert 'creators' in metadata_dict
+    assert len(metadata_dict['creators']) == 1
+    
+    creator = metadata_dict['creators'][0]
+    assert creator['name'] == 'Guralp Systems'
+    assert creator['nameType'] == 'Organizational'
+    assert 'nameIdentifiers' in creator
+    assert creator['nameIdentifiers'][0]['nameIdentifier'] == 'https://www.guralp.com'
+    assert creator['nameIdentifiers'][0]['nameIdentifierScheme'] == 'URL'
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
@@ -197,7 +199,7 @@ def test_legacy_author_fallback():
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
 def test_multiple_owners():
-    """Test handling of multiple owners (institutions)"""
+    """Test handling of multiple owners (hosting institutions)"""
     pkg_with_multiple_owners = dict(PIDINST_INSTRUMENT_PKG)
     pkg_with_multiple_owners['owner'] = [
         {
@@ -216,9 +218,11 @@ def test_multiple_owners():
     
     metadata_dict = build_metadata_dict(pkg_with_multiple_owners)
     
-    assert len(metadata_dict['creators']) == 2
-    assert metadata_dict['creators'][0]['name'] == 'University A'
-    assert metadata_dict['creators'][1]['name'] == 'University B'
+    assert len(metadata_dict['contributors']) == 2
+    assert metadata_dict['contributors'][0]['name'] == 'University A'
+    assert metadata_dict['contributors'][0]['contributorType'] == 'HostingInstitution'
+    assert metadata_dict['contributors'][1]['name'] == 'University B'
+    assert metadata_dict['contributors'][1]['contributorType'] == 'HostingInstitution'
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
@@ -231,14 +235,13 @@ def test_missing_optional_pidinst_fields():
         'type': 'instrument',
         'state': 'active',
         'private': False,
-        'owner': [
+        'manufacturer': [
             {
-                'owner_name': 'Test Institution',
-                'owner_contact': 'test@example.com'
+                'manufacturer_name': 'Test Manufacturer'
                 # No identifiers
             }
         ],
-        # No manufacturer, no alternate_identifier_obj, no related_identifier_obj
+        # No owner, no alternate_identifier_obj, no related_identifier_obj
         'description': 'Minimal test',
         'metadata_created': '2024-01-15T10:30:00',
         'metadata_modified': '2024-01-15T10:30:00',
@@ -252,3 +255,4 @@ def test_missing_optional_pidinst_fields():
     
     assert 'creators' in metadata_dict
     assert len(metadata_dict['creators']) == 1
+    assert metadata_dict['creators'][0]['name'] == 'Test Manufacturer'

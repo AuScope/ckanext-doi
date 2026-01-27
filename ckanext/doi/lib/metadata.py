@@ -26,12 +26,14 @@ def build_metadata_dict(pkg_dict):
     This function implements PIDINST-based mapping for instrument registries,
     with fallback support for traditional dataset metadata.
 
-    PIDINST Mapping (primary):
-    - creators: from 'owner' field (organizations responsible for the instrument)
-    - contributors: from 'manufacturer' field (producers of the instrument)
+    PIDINST Mapping (per DataCite schema 4.5):
+    - creators: from 'manufacturer' field (instrument manufacturers/developers)
+    - contributors: from 'owner' field (HostingInstitution - responsible organizations)
     - alternateIdentifiers: from 'alternate_identifier_obj' field
     - relatedIdentifiers: from 'related_identifier_obj' field
     - types.resourceTypeGeneral: "Instrument" (DataCite 4.5+)
+    
+    Reference: https://datacite-metadata-schema.readthedocs.io/en/4.5/mappings/pidinst/
 
     Legacy Dataset Mapping (fallback for backwards compatibility):
     - creators/contributors: from 'author' field
@@ -67,23 +69,24 @@ def build_metadata_dict(pkg_dict):
             errors[key] = e
 
     # CREATORS
-    # For PIDINST instrument schema, map 'owner' field as creators (organizations responsible)
+    # For PIDINST instrument schema, map 'manufacturer' field as creators (instrument developers/producers)
+    # Per DataCite PIDINST mapping: https://datacite-metadata-schema.readthedocs.io/en/4.5/mappings/pidinst/
     try:
         creators_list = []
-        owner_list = pkg_dict.get('owner', [])
-        if isinstance(owner_list, str):
-            owner_list = ast.literal_eval(owner_list)
-        if isinstance(owner_list, list):
-            for owner_dict in owner_list:
+        manufacturer_list = pkg_dict.get('manufacturer', [])
+        if isinstance(manufacturer_list, str):
+            manufacturer_list = ast.literal_eval(manufacturer_list)
+        if isinstance(manufacturer_list, list):
+            for mfr_dict in manufacturer_list:
                 creator = {
-                    'name': owner_dict.get('owner_name', ''),
+                    'name': mfr_dict.get('manufacturer_name', ''),
                     'nameType': 'Organizational',
                 }
-                # Add owner identifier if present
-                if owner_dict.get('owner_identifier'):
+                # Add manufacturer identifier if present
+                if mfr_dict.get('manufacturer_identifier'):
                     creator['nameIdentifiers'] = [{
-                        'nameIdentifier': owner_dict['owner_identifier'],
-                        'nameIdentifierScheme': owner_dict.get('owner_identifier_type', 'Other'),
+                        'nameIdentifier': mfr_dict['manufacturer_identifier'],
+                        'nameIdentifierScheme': mfr_dict.get('manufacturer_identifier_type', 'Other'),
                     }]
                 creators_list.append(creator)
         # Fallback: if no owners, try legacy 'author' field for backwards compatibility
@@ -194,24 +197,25 @@ def build_metadata_dict(pkg_dict):
         errors['subjects'] = e
 
     # CONTRIBUTORS
-    # For PIDINST instrument schema, map 'manufacturer' field as contributors with role 'Producer'
+    # For PIDINST instrument schema, map 'owner' field as contributors with role 'HostingInstitution'
+    # Per DataCite PIDINST mapping: https://datacite-metadata-schema.readthedocs.io/en/4.5/mappings/pidinst/
     try:
         contributors_list = []
-        manufacturer_list = pkg_dict.get('manufacturer', [])
-        if isinstance(manufacturer_list, str):
-            manufacturer_list = ast.literal_eval(manufacturer_list)
-        if isinstance(manufacturer_list, list):
-            for mfr_dict in manufacturer_list:
+        owner_list = pkg_dict.get('owner', [])
+        if isinstance(owner_list, str):
+            owner_list = ast.literal_eval(owner_list)
+        if isinstance(owner_list, list):
+            for owner_dict in owner_list:
                 contributor = {
-                    'name': mfr_dict.get('manufacturer_name', ''),
-                    'contributorType': 'Producer',
+                    'name': owner_dict.get('owner_name', ''),
+                    'contributorType': 'HostingInstitution',
                     'nameType': 'Organizational',
                 }
-                # Add manufacturer identifier if present
-                if mfr_dict.get('manufacturer_identifier'):
+                # Add owner identifier if present
+                if owner_dict.get('owner_identifier'):
                     contributor['nameIdentifiers'] = [{
-                        'nameIdentifier': mfr_dict['manufacturer_identifier'],
-                        'nameIdentifierScheme': mfr_dict.get('manufacturer_identifier_type', 'Other'),
+                        'nameIdentifier': owner_dict['owner_identifier'],
+                        'nameIdentifierScheme': owner_dict.get('owner_identifier_type', 'Other'),
                     }]
                 contributors_list.append(contributor)
         # Fallback: legacy author field as ContactPerson for backwards compatibility
