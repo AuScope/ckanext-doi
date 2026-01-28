@@ -311,6 +311,29 @@ def build_metadata_dict(pkg_dict):
             )
         except Exception as e:
             date_errors['doi_date_published'] = e
+    
+    # Add PIDINST date field (Commissioned/DeCommissioned)
+    # Per DataCite PIDINST mapping: use dateType "Other" with dateInformation
+    date_list = pkg_dict.get('date', [])
+    if isinstance(date_list, str):
+        try:
+            date_list = ast.literal_eval(date_list)
+        except (ValueError, SyntaxError):
+            date_list = []
+    if isinstance(date_list, list):
+        for date_dict in date_list:
+            date_value = date_dict.get('date_value')
+            date_type = date_dict.get('date_type', '')
+            
+            if date_value:
+                try:
+                    optional['dates'].append({
+                        'dateType': 'Other',
+                        'date': date_or_none(date_value),
+                        'dateInformation': date_type  # "Commissioned" or "DeCommissioned"
+                    })
+                except Exception as e:
+                    date_errors[f'pidinst_date_{date_type}'] = e
 
     # LANGUAGE
     # use language set in CKAN
@@ -429,9 +452,81 @@ def build_metadata_dict(pkg_dict):
 
     # DESCRIPTIONS
     # use package description
-    optional['descriptions'] = [
-        {'descriptionType': 'Other', 'description': pkg_dict.get('description', '')}
+    descriptions = [
+        {'descriptionType': 'Abstract', 'description': pkg_dict.get('description', '')}
     ]
+    
+    # Collect all TechnicalInfo descriptions (PIDINST mapping)
+    tech_info_parts = []
+    
+    # Add MODEL as TechnicalInfo description
+    model_list = pkg_dict.get('model', [])
+    if isinstance(model_list, str):
+        try:
+            model_list = ast.literal_eval(model_list)
+        except (ValueError, SyntaxError):
+            model_list = []
+    if isinstance(model_list, list) and len(model_list) > 0:
+        model_items = []
+        for model_dict in model_list:
+            model_name = model_dict.get('model_name', '')
+            model_id = model_dict.get('model_identifier', '')
+            model_id_type = model_dict.get('model_identifier_type', '')
+            
+            if model_name:
+                model_text = f"Model: {model_name}"
+                if model_id:
+                    model_text += f" ({model_id_type}: {model_id})" if model_id_type else f" (ID: {model_id})"
+                model_items.append(model_text)
+        
+        if model_items:
+            tech_info_parts.append('; '.join(model_items))
+    
+    # Add INSTRUMENT_TYPE as TechnicalInfo description
+    instrument_type_list = pkg_dict.get('instrument_type', [])
+    if isinstance(instrument_type_list, str):
+        try:
+            instrument_type_list = ast.literal_eval(instrument_type_list)
+        except (ValueError, SyntaxError):
+            instrument_type_list = []
+    if isinstance(instrument_type_list, list) and len(instrument_type_list) > 0:
+        type_items = []
+        for type_dict in instrument_type_list:
+            type_name = type_dict.get('instrument_type_name', '')
+            type_id = type_dict.get('instrument_type_identifier', '')
+            type_id_type = type_dict.get('instrument_type_identifier_type', '')
+            
+            if type_name:
+                type_text = f"Instrument Type: {type_name}"
+                if type_id:
+                    type_text += f" ({type_id_type}: {type_id})" if type_id_type else f" (ID: {type_id})"
+                type_items.append(type_text)
+        
+        if type_items:
+            tech_info_parts.append('; '.join(type_items))
+    
+    # Add MEASURED_VARIABLE as TechnicalInfo description
+    measured_variable = pkg_dict.get('measured_variable', '')
+    if measured_variable:
+        # Handle both string and list formats
+        if isinstance(measured_variable, str):
+            variables = [v.strip() for v in measured_variable.split(',') if v.strip()]
+        elif isinstance(measured_variable, list):
+            variables = [v if isinstance(v, str) else v.get('name', '') for v in measured_variable if v]
+        else:
+            variables = []
+        
+        if variables:
+            tech_info_parts.append(f"Measured Variables: {', '.join(variables)}")
+    
+    # Combine all TechnicalInfo parts into a single description
+    if tech_info_parts:
+        descriptions.append({
+            'descriptionType': 'TechnicalInfo',
+            'description': ' | '.join(tech_info_parts)
+        })
+    
+    optional['descriptions'] = descriptions
 
     # GEOLOCATIONS
     location_choice = pkg_dict.get('location_choice', None)

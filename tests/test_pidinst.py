@@ -256,3 +256,152 @@ def test_missing_optional_pidinst_fields():
     assert 'creators' in metadata_dict
     assert len(metadata_dict['creators']) == 1
     assert metadata_dict['creators'][0]['name'] == 'Test Manufacturer'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_model_mapping():
+    """Test that PIDINST 'model' field maps to DataCite descriptions with TechnicalInfo type"""
+    pkg_with_model = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_model['model'] = [
+        {
+            'model_name': 'CMG-3T',
+            'model_identifier': 'https://example.com/models/cmg3t',
+            'model_identifier_type': 'URL'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_model)
+    
+    assert 'descriptions' in metadata_dict
+    
+    # Find TechnicalInfo description
+    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    assert len(tech_info) == 1
+    assert 'CMG-3T' in tech_info[0]['description']
+    assert 'https://example.com/models/cmg3t' in tech_info[0]['description']
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_instrument_type_mapping():
+    """Test that PIDINST 'instrument_type' field maps to DataCite descriptions with TechnicalInfo type"""
+    pkg_with_type = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_type['instrument_type'] = [
+        {
+            'instrument_type_name': 'Seismometer',
+            'instrument_type_identifier': 'https://example.com/vocab/seismometer',
+            'instrument_type_identifier_type': 'URL'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_type)
+    
+    assert 'descriptions' in metadata_dict
+    
+    # Find TechnicalInfo description
+    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    assert len(tech_info) == 1
+    assert 'Instrument Type: Seismometer' in tech_info[0]['description']
+    assert 'https://example.com/vocab/seismometer' in tech_info[0]['description']
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_measured_variable_mapping():
+    """Test that PIDINST 'measured_variable' field maps to DataCite descriptions with TechnicalInfo type"""
+    pkg_with_variables = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_variables['measured_variable'] = 'ground motion, seismic waves, earthquake magnitude'
+    
+    metadata_dict = build_metadata_dict(pkg_with_variables)
+    
+    assert 'descriptions' in metadata_dict
+    
+    # Find TechnicalInfo description
+    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    assert len(tech_info) == 1
+    assert 'Measured Variables:' in tech_info[0]['description']
+    assert 'ground motion' in tech_info[0]['description']
+    assert 'seismic waves' in tech_info[0]['description']
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_combined_technical_info():
+    """Test that model, instrument_type, and measured_variable combine into single TechnicalInfo description"""
+    pkg_complete = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_complete['model'] = [{'model_name': 'CMG-3T'}]
+    pkg_complete['instrument_type'] = [{'instrument_type_name': 'Seismometer'}]
+    pkg_complete['measured_variable'] = 'ground motion'
+    
+    metadata_dict = build_metadata_dict(pkg_complete)
+    
+    # Should have both Abstract and TechnicalInfo
+    assert len(metadata_dict['descriptions']) == 2
+    
+    abstract = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'Abstract']
+    assert len(abstract) == 1
+    
+    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    assert len(tech_info) == 1
+    
+    # All three should be in the TechnicalInfo description
+    tech_desc = tech_info[0]['description']
+    assert 'Model: CMG-3T' in tech_desc
+    assert 'Instrument Type: Seismometer' in tech_desc
+    assert 'Measured Variables: ground motion' in tech_desc
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_commissioned():
+    """Test that PIDINST 'date' field with Commissioned type maps to DataCite dates with dateType Other"""
+    pkg_with_dates = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_dates['date'] = [
+        {
+            'date_value': '2023-05-15',
+            'date_type': 'Commissioned'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_dates)
+    
+    assert 'dates' in metadata_dict
+    
+    # Find the Commissioned date
+    commissioned_dates = [
+        d for d in metadata_dict['dates'] 
+        if d.get('dateType') == 'Other' and d.get('dateInformation') == 'Commissioned'
+    ]
+    
+    assert len(commissioned_dates) == 1
+    assert '2023-05-15' in str(commissioned_dates[0]['date'])
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_decommissioned():
+    """Test that PIDINST 'date' field with DeCommissioned type maps correctly"""
+    pkg_with_dates = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_dates['date'] = [
+        {
+            'date_value': '2023-05-15',
+            'date_type': 'Commissioned'
+        },
+        {
+            'date_value': '2024-12-31',
+            'date_type': 'DeCommissioned'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_dates)
+    
+    # Should have both dates plus Created, Updated
+    other_dates = [
+        d for d in metadata_dict['dates'] 
+        if d.get('dateType') == 'Other'
+    ]
+    
+    assert len(other_dates) == 2
+    
+    # Check Commissioned date
+    commissioned = [d for d in other_dates if d.get('dateInformation') == 'Commissioned']
+    assert len(commissioned) == 1
+    
+    # Check DeCommissioned date
+    decommissioned = [d for d in other_dates if d.get('dateInformation') == 'DeCommissioned']
+    assert len(decommissioned) == 1
