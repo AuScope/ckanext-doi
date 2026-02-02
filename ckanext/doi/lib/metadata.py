@@ -315,24 +315,35 @@ def build_metadata_dict(pkg_dict):
     # Add PIDINST date field (Commissioned/DeCommissioned)
     # Per DataCite PIDINST mapping: use dateType "Other" with dateInformation
     date_list = pkg_dict.get('date', [])
+    log.debug(f'PIDINST date field raw value: {date_list}')
+    
     if isinstance(date_list, str):
         try:
             date_list = ast.literal_eval(date_list)
-        except (ValueError, SyntaxError):
+            log.debug(f'PIDINST date field after parsing: {date_list}')
+        except (ValueError, SyntaxError) as e:
+            log.error(f'Error parsing PIDINST date list string: {e}')
             date_list = []
+    
     if isinstance(date_list, list):
         for date_dict in date_list:
             date_value = date_dict.get('date_value')
             date_type = date_dict.get('date_type', '')
+            log.debug(f'Processing PIDINST date: value={date_value}, type={date_type}')
             
-            if date_value:
+            if date_value and date_value != '':
                 try:
-                    optional['dates'].append({
-                        'dateType': 'Other',
-                        'date': date_or_none(date_value),
-                        'dateInformation': date_type  # "Commissioned" or "DeCommissioned"
-                    })
+                    parsed_date = date_or_none(date_value)
+                    if parsed_date:
+                        date_entry = {
+                            'dateType': 'Other',
+                            'date': parsed_date,
+                            'dateInformation': date_type  # "Commissioned" or "DeCommissioned"
+                        }
+                        log.debug(f'Adding PIDINST date to metadata: {date_entry}')
+                        optional['dates'].append(date_entry)
                 except Exception as e:
+                    log.error(f'Error parsing PIDINST date {date_value} ({date_type}): {e}')
                     date_errors[f'pidinst_date_{date_type}'] = e
 
     # LANGUAGE
