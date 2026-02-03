@@ -405,3 +405,33 @@ def test_pidinst_date_decommissioned():
     # Check DeCommissioned date
     decommissioned = [d for d in other_dates if d.get('dateInformation') == 'DeCommissioned']
     assert len(decommissioned) == 1
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_xml_format():
+    """Test that PIDINST dates are properly formatted as ISO 8601 strings in XML dict"""
+    pkg_with_dates = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_dates['date'] = [
+        {
+            'date_value': '2023-05-15',
+            'date_type': 'Commissioned'
+        },
+        {
+            'date_value': '2024-12-31',
+            'date_type': 'DeCommissioned'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_dates)
+    xml_dict = build_xml_dict(metadata_dict)
+    
+    assert 'dates' in xml_dict
+    
+    # All dates should be strings in ISO 8601 format (YYYY-MM-DD)
+    for date_entry in xml_dict['dates']:
+        date_str = date_entry['date']
+        assert isinstance(date_str, str), f"Date should be string, got {type(date_str)}"
+        # Should match ISO 8601 date format YYYY-MM-DD
+        assert len(date_str.split('-')) == 3, f"Date should be in YYYY-MM-DD format, got {date_str}"
+        # Should not contain time component
+        assert ' ' not in date_str, f"Date should not contain time component, got {date_str}"
+        assert 'T' not in date_str or date_str.index('T') > 10, f"Date should not contain time, got {date_str}"

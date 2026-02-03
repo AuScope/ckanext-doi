@@ -702,7 +702,14 @@ def build_xml_dict(metadata_dict):
             item = []
             for date_entry in v:
                 date_entry_copy = {k: v for k, v in date_entry.items()}
-                date_entry_copy['date'] = str(date_entry_copy['date'])
+                # Convert datetime to ISO 8601 date format (YYYY-MM-DD)
+                date_value = date_entry_copy['date']
+                if hasattr(date_value, 'date'):
+                    # datetime object - extract date part
+                    date_entry_copy['date'] = date_value.date().isoformat()
+                else:
+                    # Already a string or other format
+                    date_entry_copy['date'] = str(date_value)
                 item.append(date_entry_copy)
             xml_dict[k] = item
         else:
