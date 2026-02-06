@@ -180,6 +180,7 @@ def build_metadata_dict(pkg_dict):
         'descriptions': [],
         'geoLocations': [],
         'fundingReferences': [],
+        'instrumentType': None,
     }
 
     # SUBJECTS
@@ -462,82 +463,110 @@ def build_metadata_dict(pkg_dict):
         errors['rightsList'] = e
 
     # DESCRIPTIONS
-    # use package description
     descriptions = [
-        {'descriptionType': 'Abstract', 'description': pkg_dict.get('description', '')}
+        {
+            "descriptionType": "Abstract",
+            "description": pkg_dict.get("description", "") or "",
+        }
     ]
-    
-    # Collect all TechnicalInfo descriptions (PIDINST mapping)
-    tech_info_parts = []
-    
-    # Add MODEL as TechnicalInfo description
-    model_list = pkg_dict.get('model', [])
+
+    # ----------------------------
+    # TechnicalInfo: Models
+    # ----------------------------
+    model_list = pkg_dict.get("model", [])
     if isinstance(model_list, str):
         try:
             model_list = ast.literal_eval(model_list)
         except (ValueError, SyntaxError):
             model_list = []
-    if isinstance(model_list, list) and len(model_list) > 0:
-        model_items = []
+
+    model_items: list[str] = []
+    if isinstance(model_list, list):
         for model_dict in model_list:
-            model_name = model_dict.get('model_name', '')
-            model_id = model_dict.get('model_identifier', '')
-            model_id_type = model_dict.get('model_identifier_type', '')
-            
-            if model_name:
-                model_text = f"Model: {model_name}"
-                if model_id:
-                    model_text += f" ({model_id_type}: {model_id})" if model_id_type else f" (ID: {model_id})"
-                model_items.append(model_text)
-        
-        if model_items:
-            tech_info_parts.append('; '.join(model_items))
-    
-    # Add INSTRUMENT_TYPE as TechnicalInfo description
-    instrument_type_list = pkg_dict.get('instrument_type', [])
+            if not isinstance(model_dict, dict):
+                continue
+
+            model_name = (model_dict.get("model_name") or "").strip()
+            model_id = (model_dict.get("model_identifier") or "").strip()
+            model_id_type = (model_dict.get("model_identifier_type") or "").strip()
+
+            if not model_name:
+                continue
+
+            text = f"{model_name}"
+            if model_id:
+                text += f" ({model_id_type}: {model_id})" if model_id_type else f" (ID: {model_id})"
+            model_items.append(text)
+
+    if model_items:
+        descriptions.append(
+            {
+                "descriptionType": "TechnicalInfo",
+                "description": f"Model(s): " + "; ".join(model_items),
+            }
+        )
+
+    # ----------------------------
+    # TechnicalInfo: Measured Variables
+    # ----------------------------
+    measured_variable = pkg_dict.get("measured_variable", "")
+    variables: list[str] = []
+
+    if measured_variable:
+        if isinstance(measured_variable, str):
+            # CSV-ish string
+            variables = [v.strip() for v in measured_variable.split(",") if v.strip()]
+        elif isinstance(measured_variable, list):
+            # list[str] or list[dict]
+            for v in measured_variable:
+                if isinstance(v, str) and v.strip():
+                    variables.append(v.strip())
+                elif isinstance(v, dict):
+                    name = (v.get("name") or "").strip()
+                    if name:
+                        variables.append(name)
+
+    # Deduplicate while preserving order
+    seen = set()
+    variables = [v for v in variables if not (v in seen or seen.add(v))]
+
+    if variables:
+        descriptions.append(
+            {
+                "descriptionType": "TechnicalInfo",
+                "description": "Measured Variable(s): " + ", ".join(variables),
+            }
+        )
+
+    # ----------------------------
+    # TechnicalInfo: Instrument Types
+    # ----------------------------
+    # Add each instrument type as a separate TechnicalInfo description
+    # Store the first instrument type name for use in resourceType field
+    instrument_type_list = pkg_dict.get("instrument_type", [])
     if isinstance(instrument_type_list, str):
         try:
             instrument_type_list = ast.literal_eval(instrument_type_list)
         except (ValueError, SyntaxError):
             instrument_type_list = []
-    if isinstance(instrument_type_list, list) and len(instrument_type_list) > 0:
-        type_items = []
+
+    if isinstance(instrument_type_list, list):
         for type_dict in instrument_type_list:
-            type_name = type_dict.get('instrument_type_name', '')
-            type_id = type_dict.get('instrument_type_identifier', '')
-            type_id_type = type_dict.get('instrument_type_identifier_type', '')
-            
-            if type_name:
-                type_text = f"Instrument Type: {type_name}"
-                if type_id:
-                    type_text += f" ({type_id_type}: {type_id})" if type_id_type else f" (ID: {type_id})"
-                type_items.append(type_text)
-        
-        if type_items:
-            tech_info_parts.append('; '.join(type_items))
-    
-    # Add MEASURED_VARIABLE as TechnicalInfo description
-    measured_variable = pkg_dict.get('measured_variable', '')
-    if measured_variable:
-        # Handle both string and list formats
-        if isinstance(measured_variable, str):
-            variables = [v.strip() for v in measured_variable.split(',') if v.strip()]
-        elif isinstance(measured_variable, list):
-            variables = [v if isinstance(v, str) else v.get('name', '') for v in measured_variable if v]
-        else:
-            variables = []
-        
-        if variables:
-            tech_info_parts.append(f"Measured Variables: {', '.join(variables)}")
-    
-    # Combine all TechnicalInfo parts into a single description
-    if tech_info_parts:
-        descriptions.append({
-            'descriptionType': 'TechnicalInfo',
-            'description': ' | '.join(tech_info_parts)
-        })
-    
-    optional['descriptions'] = descriptions
+            if isinstance(type_dict, dict):
+                type_name = (type_dict.get("instrument_type_name") or "").strip()
+                if type_name:
+                    # Add as separate TechnicalInfo description (no prefix text)
+                    descriptions.append(
+                        {
+                            "descriptionType": "TechnicalInfo",
+                            "description": type_name,
+                        }
+                    )
+                    # Store first instrument type name for resourceType
+                    if optional.get('instrumentType') is None:
+                        optional['instrumentType'] = type_name
+
+    optional["descriptions"] = descriptions
 
     # GEOLOCATIONS
     location_choice = pkg_dict.get('location_choice', None)
@@ -640,13 +669,15 @@ def build_xml_dict(metadata_dict):
         # For Sample Repository resource type is "PhysicalObject"
         resource_type_general = "PhysicalObject"
         resource_type = "PhysicalObject"
+    elif "auscope_theme" in toolkit.config.get('ckan.plugins'):
+        resource_type = "Dataset"
+        resource_type_general = "Dataset"
     else:
         # Check if this is an instrument dataset (PIDINST schema)
         # Default to "Instrument" for instrument registries, fallback to "Dataset"
-        resource_type = metadata_dict.get('resourceType', 'Instrument')
-        # Use config to determine if we're an instrument registry
-        is_instrument = toolkit.config.get('ckanext.doi.resource_type', 'Instrument') == 'Instrument'
-        resource_type_general = "Instrument" if is_instrument else "Dataset"
+        resource_type_general = "Instrument"
+        # Use first instrumentType from metadata if available, otherwise use generic fallback
+        resource_type = metadata_dict.get('instrumentType') or "Instrument (unspecified type)"
 
     # Get schema version from config (default 4.5)
     schema_version = toolkit.config.get('ckanext.doi.datacite_schema_version', '4.5')

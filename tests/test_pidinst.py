@@ -129,7 +129,8 @@ def test_instrument_resource_type():
     xml_dict = build_xml_dict(metadata_dict)
     
     assert xml_dict['types']['resourceTypeGeneral'] == 'Instrument'
-    assert xml_dict['types']['resourceType'] == 'instrument'
+    # When no instrument_type is provided, it should fall back to generic text
+    assert xml_dict['types']['resourceType'] == 'Instrument (unspecified type)'
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
@@ -168,7 +169,7 @@ def test_legacy_author_fallback():
         'id': 'test-dataset-456',
         'name': 'test-dataset',
         'title': 'Test Dataset',
-        'type': 'dataset',
+        'type': 'instrument',
         'state': 'active',
         'private': False,
         'author': [
@@ -275,7 +276,7 @@ def test_pidinst_model_mapping():
     assert 'descriptions' in metadata_dict
     
     # Find TechnicalInfo description
-    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    tech_info = [d for d in metadata_dict['descriptions'] if (d['descriptionType'] == 'TechnicalInfo' and 'Model(s):' in d['description'])]
     assert len(tech_info) == 1
     assert 'CMG-3T' in tech_info[0]['description']
     assert 'https://example.com/models/cmg3t' in tech_info[0]['description']
@@ -283,7 +284,7 @@ def test_pidinst_model_mapping():
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
 def test_pidinst_instrument_type_mapping():
-    """Test that PIDINST 'instrument_type' field maps to DataCite descriptions with TechnicalInfo type"""
+    """Test that PIDINST 'instrument_type' field maps to both DataCite descriptions (TechnicalInfo) and resource_type"""
     pkg_with_type = dict(PIDINST_INSTRUMENT_PKG)
     pkg_with_type['instrument_type'] = [
         {
@@ -294,14 +295,64 @@ def test_pidinst_instrument_type_mapping():
     ]
     
     metadata_dict = build_metadata_dict(pkg_with_type)
+    xml_dict = build_xml_dict(metadata_dict)
     
+    # Should be in descriptions as TechnicalInfo
     assert 'descriptions' in metadata_dict
-    
-    # Find TechnicalInfo description
-    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo' and d['description'] == 'Seismometer']
     assert len(tech_info) == 1
-    assert 'Instrument Type: Seismometer' in tech_info[0]['description']
-    assert 'https://example.com/vocab/seismometer' in tech_info[0]['description']
+    
+    # Should also map to instrumentType in metadata_dict
+    assert 'instrumentType' in metadata_dict
+    assert metadata_dict['instrumentType'] == 'Seismometer'
+    
+    # Should map to resource_type in XML dict
+    assert xml_dict['types']['resourceType'] == 'Seismometer'
+    assert xml_dict['types']['resourceTypeGeneral'] == 'Instrument'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_no_instrument_type_fallback():
+    """Test that when no instrument_type is provided, resourceType falls back to 'Instrument (unspecified type)'"""
+    pkg_no_type = dict(PIDINST_INSTRUMENT_PKG)
+    # Explicitly no instrument_type field
+    
+    metadata_dict = build_metadata_dict(pkg_no_type)
+    xml_dict = build_xml_dict(metadata_dict)
+    
+    # Should not have instrumentType in metadata_dict
+    assert 'instrumentType' not in metadata_dict or metadata_dict.get('instrumentType') is None
+    
+    # Should use fallback in XML dict
+    assert xml_dict['types']['resourceType'] == 'Instrument (unspecified type)'
+    assert xml_dict['types']['resourceTypeGeneral'] == 'Instrument'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_multiple_instrument_types():
+    """Test that multiple instrument types are added as separate TechnicalInfo descriptions, and first is used for resourceType"""
+    pkg_multi_type = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_multi_type['instrument_type'] = [
+        {'instrument_type_name': 'Seismometer'},
+        {'instrument_type_name': 'Accelerometer'},
+        {'instrument_type_name': 'Geophone'}
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_multi_type)
+    xml_dict = build_xml_dict(metadata_dict)
+    
+    # All three should be in descriptions as separate TechnicalInfo entries
+    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    instrument_types = [d['description'] for d in tech_info if d['description'] in ['Seismometer', 'Accelerometer', 'Geophone']]
+    
+    assert len(instrument_types) == 3
+    assert 'Seismometer' in instrument_types
+    assert 'Accelerometer' in instrument_types
+    assert 'Geophone' in instrument_types
+    
+    # First instrument type should be used for resourceType
+    assert metadata_dict['instrumentType'] == 'Seismometer'
+    assert xml_dict['types']['resourceType'] == 'Seismometer'
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
@@ -315,37 +366,45 @@ def test_pidinst_measured_variable_mapping():
     assert 'descriptions' in metadata_dict
     
     # Find TechnicalInfo description
-    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
+    tech_info = [d for d in metadata_dict['descriptions'] if (d['descriptionType'] == 'TechnicalInfo' and 'Measured Variable(s):' in d['description'])]
     assert len(tech_info) == 1
-    assert 'Measured Variables:' in tech_info[0]['description']
+    assert 'Measured Variable(s):' in tech_info[0]['description']
     assert 'ground motion' in tech_info[0]['description']
     assert 'seismic waves' in tech_info[0]['description']
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
 def test_pidinst_combined_technical_info():
-    """Test that model, instrument_type, and measured_variable combine into single TechnicalInfo description"""
+    """Test that model, measured_variable, and instrument_type are all in TechnicalInfo descriptions as separate entries"""
     pkg_complete = dict(PIDINST_INSTRUMENT_PKG)
     pkg_complete['model'] = [{'model_name': 'CMG-3T'}]
     pkg_complete['instrument_type'] = [{'instrument_type_name': 'Seismometer'}]
     pkg_complete['measured_variable'] = 'ground motion'
     
     metadata_dict = build_metadata_dict(pkg_complete)
+    xml_dict = build_xml_dict(metadata_dict)
     
-    # Should have both Abstract and TechnicalInfo
-    assert len(metadata_dict['descriptions']) == 2
+    # Should have Abstract and 3 TechnicalInfo entries (model, measured_variable, instrument_type)
+    assert len(metadata_dict['descriptions']) == 4
     
     abstract = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'Abstract']
     assert len(abstract) == 1
     
     tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
-    assert len(tech_info) == 1
+    assert len(tech_info) == 3
     
-    # All three should be in the TechnicalInfo description
-    tech_desc = tech_info[0]['description']
-    assert 'Model: CMG-3T' in tech_desc
-    assert 'Instrument Type: Seismometer' in tech_desc
-    assert 'Measured Variables: ground motion' in tech_desc
+    # Check that model, measured_variable, and instrument_type are all in TechnicalInfo as separate entries
+    model_found = any('Model(s): CMG-3T' in d['description'] for d in tech_info)
+    variable_found = any('Measured Variable(s): ground motion' in d['description'] for d in tech_info)
+    instrument_type_found = any(d['description'] == 'Seismometer' for d in tech_info)
+    
+    assert model_found, "Model should be in TechnicalInfo description"
+    assert variable_found, "Measured variable should be in TechnicalInfo description"
+    assert instrument_type_found, "Instrument type should be in TechnicalInfo description as separate entry"
+    
+    # Verify instrument_type is also mapped to resource_type
+    assert metadata_dict['instrumentType'] == 'Seismometer'
+    assert xml_dict['types']['resourceType'] == 'Seismometer'
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
