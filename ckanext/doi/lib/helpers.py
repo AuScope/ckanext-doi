@@ -66,3 +66,12 @@ def doi_test_mode():
     :return: bool
     """
     return toolkit.asbool(get_setting('ckanext.doi.test_mode', default=get_debug()))
+
+
+def doi_dev_mode():
+    """
+    Determines whether we're running in dev mode (fake DOI minting for localhost).
+
+    :return: bool
+    """
+    return toolkit.asbool(get_setting('ckanext.doi.dev_mode', default=False))

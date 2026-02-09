@@ -157,6 +157,31 @@ If test mode is set to true, the DOIs will use the DataCite test site. The test 
 
 Note that the DOIs will still display on your web interface as `https://doi.org/YOUR-DOI`, but they _will not resolve_. Log in to your test account to view all your minted test DOIs, or replace `https://doi.org/` with `https://doi.test.datacite.org/dois/` in a single URL to view a specific DOI.
 
+## Development Mode (Localhost)
+
+For local development where your site runs on localhost, you can use development mode to completely bypass DataCite API calls. This is useful when even the DataCite test API rejects localhost URLs.
+
+| Name                    | Description                                  | Options    |
+| ----------------------- | -------------------------------------------- | ---------- |
+| `ckanext.doi.dev_mode`  | Enable development mode with fake DOI minting | True/False |
+
+When dev mode is enabled:
+
+- DOIs are generated and stored locally in memory (not registered with DataCite)
+- No API calls are made to DataCite
+- Localhost URLs are accepted
+- All DOI operations (generate, mint, metadata updates) are simulated
+- Metadata is validated against DataCite schema but not submitted
+
+**Example configuration:**
+
+```ini
+ckanext.doi.dev_mode = True
+ckanext.doi.prefix = 10.5555
+```
+
+**Note:** Dev mode is independent of test mode. Use dev mode for local development on localhost, and test mode when you have a DataCite test account and a publicly accessible domain.
+
 ## Other options
 
 | Name                                  | Description                                                                      | Default         |

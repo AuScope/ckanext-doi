@@ -10,12 +10,13 @@ from logging import getLogger
 from ckan.plugins import SingletonPlugin, implements, interfaces, toolkit
 
 from ckanext.doi import cli
-from ckanext.doi.lib.api import DataciteClient
+from ckanext.doi.lib.api import get_client
 from ckanext.doi.lib.helpers import (
     get_site_title,
     get_site_url,
     package_get_year,
     doi_test_mode,
+    doi_dev_mode,
 )
 from ckanext.doi.lib.metadata import build_metadata_dict, build_xml_dict
 from ckanext.doi.model.crud import DOIQuery
@@ -83,7 +84,7 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
             metadata_dict = build_metadata_dict(pkg_show_dict)
             xml_dict = build_xml_dict(metadata_dict)
 
-            client = DataciteClient()
+            client = get_client()
 
             if doi.published is None:
                 # Set issued date in DOI metadata knowing that it will be minted immediately
@@ -144,4 +145,5 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
             'now': datetime.now,
             'get_site_title': get_site_title,
             'doi_test_mode': doi_test_mode,
+            'doi_dev_mode': doi_dev_mode,
         }
