@@ -22,6 +22,7 @@ PIDINST_INSTRUMENT_PKG = {
         {
             'owner_name': 'Australian National University',
             'owner_contact': 'geophysics@anu.edu.au',
+            'owner_relationship_type': 'HostingInstitution',
             'owner_identifier': 'https://ror.org/019wvm592',
             'owner_identifier_type': 'ROR'
         }
@@ -206,12 +207,14 @@ def test_multiple_owners():
         {
             'owner_name': 'University A',
             'owner_contact': 'contact@university-a.edu',
+            'owner_relationship_type': 'HostingInstitution',
             'owner_identifier': 'https://ror.org/111111111',
             'owner_identifier_type': 'ROR'
         },
         {
             'owner_name': 'University B',
             'owner_contact': 'contact@university-b.edu',
+            'owner_relationship_type': 'HostingInstitution',
             'owner_identifier': 'https://ror.org/222222222',
             'owner_identifier_type': 'ROR'
         }

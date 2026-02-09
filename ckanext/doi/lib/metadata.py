@@ -28,7 +28,7 @@ def build_metadata_dict(pkg_dict):
 
     PIDINST Mapping (per DataCite schema 4.5):
     - creators: from 'manufacturer' field (instrument manufacturers/developers)
-    - contributors: from 'owner' field (HostingInstitution - responsible organizations)
+    - contributors: from 'owner' field (HostingInstitution | DataCollector | Sponsor - responsible organizations)
     - alternateIdentifiers: from 'alternate_identifier_obj' field
     - relatedIdentifiers: from 'related_identifier_obj' field
     - types.resourceTypeGeneral: "Instrument" (DataCite 4.5+)
@@ -209,7 +209,7 @@ def build_metadata_dict(pkg_dict):
             for owner_dict in owner_list:
                 contributor = {
                     'name': owner_dict.get('owner_name', ''),
-                    'contributorType': 'HostingInstitution',
+                    'contributorType': owner_dict.get('owner_relationship_type', ''), # 'HostingInstitution',
                     'nameType': 'Organizational',
                 }
                 # Add owner identifier if present
