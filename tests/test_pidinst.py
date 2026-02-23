@@ -497,3 +497,240 @@ def test_pidinst_date_xml_format():
         # Should not contain time component
         assert ' ' not in date_str, f"Date should not contain time component, got {date_str}"
         assert 'T' not in date_str or date_str.index('T') > 10, f"Date should not contain time, got {date_str}"
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funding_basic():
+    """Test that PIDINST 'funder' field with basic funder_name maps to DataCite fundingReferences"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_funding['funder'] = [
+        {
+            'funder_name': 'National Science Foundation'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    
+    assert 'fundingReferences' in metadata_dict
+    assert len(metadata_dict['fundingReferences']) == 1
+    
+    funding_ref = metadata_dict['fundingReferences'][0]
+    assert funding_ref['funderName'] == 'National Science Foundation'
+    # Should not have other fields when not provided
+    assert 'funderIdentifier' not in funding_ref
+    assert 'schemaURI' not in funding_ref
+    assert 'awardNumber' not in funding_ref
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funding_with_identifier():
+    """Test that funder with identifier and type maps correctly"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_funding['funder'] = [
+        {
+            'funder_name': 'National Science Foundation',
+            'funder_identifier': 'https://ror.org/021nxhr62',
+            'funder_identifier_type': 'ROR'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    
+    assert 'fundingReferences' in metadata_dict
+    assert len(metadata_dict['fundingReferences']) == 1
+    
+    funding_ref = metadata_dict['fundingReferences'][0]
+    assert funding_ref['funderName'] == 'National Science Foundation'
+    assert funding_ref['funderIdentifier'] == 'https://ror.org/021nxhr62'
+    assert funding_ref['funderIdentifierType'] == 'ROR'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funding_all_fields():
+    """Test that all funding reference fields map correctly"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_funding['funder'] = [
+        {
+            'funder_name': 'National Science Foundation',
+            'funder_identifier': 'https://ror.org/021nxhr62',
+            'funder_identifier_type': 'ROR',
+            'schema_uri': 'https://ror.org/',
+            'award_number': 'NSF-2024-12345',
+            'award_uri': 'https://www.nsf.gov/awards/2024/12345',
+            'award_title': 'Research on Seismic Monitoring Technology'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    
+    assert 'fundingReferences' in metadata_dict
+    assert len(metadata_dict['fundingReferences']) == 1
+    
+    funding_ref = metadata_dict['fundingReferences'][0]
+    assert funding_ref['funderName'] == 'National Science Foundation'
+    assert funding_ref['funderIdentifier'] == 'https://ror.org/021nxhr62'
+    assert funding_ref['funderIdentifierType'] == 'ROR'
+    assert funding_ref['schemaURI'] == 'https://ror.org/'
+    assert funding_ref['awardNumber'] == 'NSF-2024-12345'
+    assert funding_ref['awardURI'] == 'https://www.nsf.gov/awards/2024/12345'
+    assert funding_ref['awardTitle'] == 'Research on Seismic Monitoring Technology'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_multiple_funders():
+    """Test that multiple funding references are handled correctly"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_funding['funder'] = [
+        {
+            'funder_name': 'National Science Foundation',
+            'funder_identifier': 'https://ror.org/021nxhr62',
+            'funder_identifier_type': 'ROR',
+            'award_number': 'NSF-2024-12345'
+        },
+        {
+            'funder_name': 'European Research Council',
+            'funder_identifier': '10.13039/501100000781',
+            'funder_identifier_type': 'CrossrefFunderID',
+            'award_number': 'ERC-2024-67890',
+            'award_title': 'Advanced Seismology Research'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    
+    assert 'fundingReferences' in metadata_dict
+    assert len(metadata_dict['fundingReferences']) == 2
+    
+    # Check first funder
+    funding_ref_1 = metadata_dict['fundingReferences'][0]
+    assert funding_ref_1['funderName'] == 'National Science Foundation'
+    assert funding_ref_1['funderIdentifier'] == 'https://ror.org/021nxhr62'
+    assert funding_ref_1['funderIdentifierType'] == 'ROR'
+    assert funding_ref_1['awardNumber'] == 'NSF-2024-12345'
+    assert 'awardTitle' not in funding_ref_1
+    
+    # Check second funder
+    funding_ref_2 = metadata_dict['fundingReferences'][1]
+    assert funding_ref_2['funderName'] == 'European Research Council'
+    assert funding_ref_2['funderIdentifier'] == '10.13039/501100000781'
+    assert funding_ref_2['funderIdentifierType'] == 'CrossrefFunderID'
+    assert funding_ref_2['awardNumber'] == 'ERC-2024-67890'
+    assert funding_ref_2['awardTitle'] == 'Advanced Seismology Research'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funding_string_format():
+    """Test that funder field as string representation is properly parsed"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    # Simulate string format that might come from form submission
+    pkg_with_funding['funder'] = str([
+        {
+            'funder_name': 'National Science Foundation',
+            'funder_identifier': 'https://ror.org/021nxhr62',
+            'funder_identifier_type': 'ROR'
+        }
+    ])
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    
+    assert 'fundingReferences' in metadata_dict
+    assert len(metadata_dict['fundingReferences']) == 1
+    
+    funding_ref = metadata_dict['fundingReferences'][0]
+    assert funding_ref['funderName'] == 'National Science Foundation'
+    assert funding_ref['funderIdentifier'] == 'https://ror.org/021nxhr62'
+    assert funding_ref['funderIdentifierType'] == 'ROR'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funding_partial_fields():
+    """Test that partial funding reference fields (optional fields missing) don't cause errors"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_funding['funder'] = [
+        {
+            'funder_name': 'Research Foundation',
+            'funder_identifier': 'https://example.com/funder',
+            'funder_identifier_type': 'URL',
+            # schema_uri, award_number, award_uri, award_title not provided
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    
+    assert 'fundingReferences' in metadata_dict
+    assert len(metadata_dict['fundingReferences']) == 1
+    
+    funding_ref = metadata_dict['fundingReferences'][0]
+    assert funding_ref['funderName'] == 'Research Foundation'
+    assert funding_ref['funderIdentifier'] == 'https://example.com/funder'
+    assert funding_ref['funderIdentifierType'] == 'URL'
+    # These should not be present
+    assert 'schemaURI' not in funding_ref
+    assert 'awardNumber' not in funding_ref
+    assert 'awardURI' not in funding_ref
+    assert 'awardTitle' not in funding_ref
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funding_identifier_types():
+    """Test various funder identifier types (ROR, CrossrefFunderID, GRID, ISNI, Other)"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_funding['funder'] = [
+        {'funder_name': 'Funder 1', 'funder_identifier': 'https://ror.org/123', 'funder_identifier_type': 'ROR'},
+        {'funder_name': 'Funder 2', 'funder_identifier': '10.13039/123', 'funder_identifier_type': 'CrossrefFunderID'},
+        {'funder_name': 'Funder 3', 'funder_identifier': 'grid.123.4', 'funder_identifier_type': 'GRID'},
+        {'funder_name': 'Funder 4', 'funder_identifier': '0000 0001 2345 6789', 'funder_identifier_type': 'ISNI'},
+        {'funder_name': 'Funder 5', 'funder_identifier': 'custom-id-123', 'funder_identifier_type': 'Other'},
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    
+    assert 'fundingReferences' in metadata_dict
+    assert len(metadata_dict['fundingReferences']) == 5
+    
+    assert metadata_dict['fundingReferences'][0]['funderIdentifierType'] == 'ROR'
+    assert metadata_dict['fundingReferences'][1]['funderIdentifierType'] == 'CrossrefFunderID'
+    assert metadata_dict['fundingReferences'][2]['funderIdentifierType'] == 'GRID'
+    assert metadata_dict['fundingReferences'][3]['funderIdentifierType'] == 'ISNI'
+    assert metadata_dict['fundingReferences'][4]['funderIdentifierType'] == 'Other'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_no_funding():
+    """Test that missing or empty funder field doesn't cause errors"""
+    pkg_no_funding = dict(PIDINST_INSTRUMENT_PKG)
+    # No funder field at all
+    
+    metadata_dict = build_metadata_dict(pkg_no_funding)
+    
+    # fundingReferences should be empty list (from optional defaults)
+    assert 'fundingReferences' in metadata_dict
+    assert metadata_dict['fundingReferences'] == []
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funding_xml_dict():
+    """Test that funding references are properly included in XML dict"""
+    pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_funding['funder'] = [
+        {
+            'funder_name': 'National Science Foundation',
+            'funder_identifier': 'https://ror.org/021nxhr62',
+            'funder_identifier_type': 'ROR',
+            'award_number': 'NSF-2024-12345',
+            'award_title': 'Research Grant'
+        }
+    ]
+    
+    metadata_dict = build_metadata_dict(pkg_with_funding)
+    xml_dict = build_xml_dict(metadata_dict)
+    
+    assert 'fundingReferences' in xml_dict
+    assert len(xml_dict['fundingReferences']) == 1
+    
+    funding_ref = xml_dict['fundingReferences'][0]
+    assert funding_ref['funderName'] == 'National Science Foundation'
+    assert funding_ref['funderIdentifier'] == 'https://ror.org/021nxhr62'
+    assert funding_ref['funderIdentifierType'] == 'ROR'
+    assert funding_ref['awardNumber'] == 'NSF-2024-12345'
+    assert funding_ref['awardTitle'] == 'Research Grant'

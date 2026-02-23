@@ -161,9 +161,9 @@ Note that the DOIs will still display on your web interface as `https://doi.org/
 
 For local development where your site runs on localhost, you can use development mode to completely bypass DataCite API calls. This is useful when even the DataCite test API rejects localhost URLs.
 
-| Name                    | Description                                  | Options    |
-| ----------------------- | -------------------------------------------- | ---------- |
-| `ckanext.doi.dev_mode`  | Enable development mode with fake DOI minting | True/False |
+| Name                   | Description                                   | Options    |
+| ---------------------- | --------------------------------------------- | ---------- |
+| `ckanext.doi.dev_mode` | Enable development mode with fake DOI minting | True/False |
 
 When dev mode is enabled:
 

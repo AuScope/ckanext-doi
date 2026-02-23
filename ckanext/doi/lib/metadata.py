@@ -602,16 +602,37 @@ def build_metadata_dict(pkg_dict):
     # For PIDINST schema, use 'funder' field if present
     if pkg_dict.get('funder', '') != '':
         try:
-            funder_list = ast.literal_eval(pkg_dict.get('funder'))
+            funder_list = pkg_dict.get('funder')
+            if isinstance(funder_list, str):
+                funder_list = ast.literal_eval(funder_list)
             optional['fundingReferences'] = []
-            for funder in funder_list:
-                id_type = funder.get('funder_identifier_type', 'Other')
-                # DataCite 4.5 supports Wikidata and other identifier types
-                funding_ref = {'funderName': funder.get('funder_name', '')}
-                if funder.get('funder_identifier'):
-                    funding_ref['funderIdentifier'] = funder['funder_identifier']
-                    funding_ref['funderIdentifierType'] = id_type
-                optional['fundingReferences'].append(funding_ref)
+            if isinstance(funder_list, list):
+                for funder in funder_list:
+                    # DataCite 4.5 supports ROR, CrossrefFunderID, GRID, ISNI, and other identifier types
+                    funding_ref = {'funderName': funder.get('funder_name', '')}
+                    
+                    # Add funder identifier if present
+                    if funder.get('funder_identifier'):
+                        funding_ref['funderIdentifier'] = funder['funder_identifier']
+                        funding_ref['funderIdentifierType'] = funder.get('funder_identifier_type', 'Other')
+                    
+                    # Add schema URI if present
+                    if funder.get('schema_uri'):
+                        funding_ref['schemaURI'] = funder['schema_uri']
+                    
+                    # Add award number if present
+                    if funder.get('award_number'):
+                        funding_ref['awardNumber'] = funder['award_number']
+                    
+                    # Add award URI if present
+                    if funder.get('award_uri'):
+                        funding_ref['awardURI'] = funder['award_uri']
+                    
+                    # Add award title if present
+                    if funder.get('award_title'):
+                        funding_ref['awardTitle'] = funder['award_title']
+                    
+                    optional['fundingReferences'].append(funding_ref)
         except Exception as e:
             errors['fundingReferences'] = e
 
