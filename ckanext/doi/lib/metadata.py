@@ -209,7 +209,7 @@ def build_metadata_dict(pkg_dict):
             for owner_dict in owner_list:
                 contributor = {
                     'name': owner_dict.get('owner_name', ''),
-                    'contributorType': owner_dict.get('owner_relationship_type', ''), # 'HostingInstitution',
+                    'contributorType': 'HostingInstitution',
                     'nameType': 'Organizational',
                 }
                 # Add owner identifier if present
