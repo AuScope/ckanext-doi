@@ -543,6 +543,30 @@ def build_metadata_dict(pkg_dict):
     # ----------------------------
     # Add each instrument type as a separate TechnicalInfo description
     # Store the first instrument type name for use in resourceType field
+    instrument_type_list_gcmd = pkg_dict.get("instrument_type_gcmd", [])
+    if isinstance(instrument_type_list_gcmd, str):
+        try:
+            instrument_type_list_gcmd = ast.literal_eval(instrument_type_list_gcmd)
+        except (ValueError, SyntaxError):
+            instrument_type_list_gcmd = []
+
+    if isinstance(instrument_type_list_gcmd, list):
+        for instrument_type_gcmd in instrument_type_list_gcmd:
+            if isinstance(instrument_type_gcmd, str):
+                type_name = instrument_type_gcmd
+                if type_name:
+                    # Add as separate TechnicalInfo description (no prefix text)
+                    descriptions.append(
+                        {
+                            "descriptionType": "TechnicalInfo",
+                            "description": type_name,
+                        }
+                    )
+                    # Store first instrument type name for resourceType
+                    if optional.get('instrumentType') is None:
+                        optional['instrumentType'] = type_name
+
+
     instrument_type_list = pkg_dict.get("instrument_type", [])
     if isinstance(instrument_type_list, str):
         try:
