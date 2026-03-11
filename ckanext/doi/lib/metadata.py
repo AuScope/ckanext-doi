@@ -559,7 +559,7 @@ def build_metadata_dict(pkg_dict):
                     descriptions.append(
                         {
                             "descriptionType": "TechnicalInfo",
-                            "description": type_name,
+                            "description": f"{type_name} (GCMD)",
                         }
                     )
                     # Store first instrument type name for resourceType
