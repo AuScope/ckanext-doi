@@ -640,17 +640,18 @@ def build_metadata_dict(pkg_dict):
                         funding_ref['funderIdentifier'] = funder['funder_identifier']
                         funding_ref['funderIdentifierType'] = funder.get('funder_identifier_type', 'Other')
                     
-                    # Add schema URI if present
-                    if funder.get('schema_uri'):
-                        funding_ref['schemeURI'] = funder['schema_uri']
+                    # NOTE: schemeURI is an XML attribute on <funderIdentifier> in the
+                    # DataCite XML schema but has NO equivalent top-level property in
+                    # the JSON representation used by datacite-python schema45.
+                    # It must NOT be included here.
                     
                     # Add award number if present
                     if funder.get('award_number'):
                         funding_ref['awardNumber'] = funder['award_number']
                     
-                    # Add award URI if present
+                    # Add award URI if present (JSON key is 'awardUri', not XML-style 'awardURI')
                     if funder.get('award_uri'):
-                        funding_ref['awardURI'] = funder['award_uri']
+                        funding_ref['awardUri'] = funder['award_uri']
                     
                     # Add award title if present
                     if funder.get('award_title'):
