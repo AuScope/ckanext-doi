@@ -642,7 +642,7 @@ def build_metadata_dict(pkg_dict):
                     
                     # Add schema URI if present
                     if funder.get('schema_uri'):
-                        funding_ref['schemaUri'] = funder['schema_uri']
+                        funding_ref['schemeURI'] = funder['schema_uri']
                     
                     # Add award number if present
                     if funder.get('award_number'):
@@ -650,7 +650,7 @@ def build_metadata_dict(pkg_dict):
                     
                     # Add award URI if present
                     if funder.get('award_uri'):
-                        funding_ref['awardUri'] = funder['award_uri']
+                        funding_ref['awardURI'] = funder['award_uri']
                     
                     # Add award title if present
                     if funder.get('award_title'):
