@@ -9,7 +9,6 @@ import string
 import logging
 import random
 import xmltodict
-from ckan.common import asbool
 from ckan.plugins import toolkit
 from ckanext.doi.model.crud import DOIQuery
 from datacite import DataCiteMDSClient, schema45
@@ -160,6 +159,19 @@ class DataciteClient:
         except DataCiteNotFoundError:
             metadata = None
         return metadata
+
+    def deactivate_doi(self, doi):
+        """Move a Findable DOI to Registered state.
+
+        Deletes metadata on DataCite so the DOI stops appearing in search/discovery
+        but continues to resolve.  Safe to call if the DOI is already inactive.
+        """
+        try:
+            self.client.metadata_delete(doi)
+        except DataCiteNotFoundError:
+            pass
+        except DataCiteError as e:
+            log.warning('DataCite deactivate failed for %s: %s', doi, e)
 
     def check_for_update(self, doi, xml_dict):
         """
