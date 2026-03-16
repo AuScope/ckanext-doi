@@ -509,64 +509,33 @@ def build_metadata_dict(pkg_dict):
     # ----------------------------
     # TechnicalInfo: Measured Variables
     # ----------------------------
-    measured_variable = pkg_dict.get("measured_variable", "")
-    variables: list[str] = []
+    measured_variable_list = pkg_dict.get("measured_variable", [])
+    if isinstance(measured_variable_list, str):
+        try:
+            measured_variable_list = ast.literal_eval(measured_variable_list)
+        except (ValueError, SyntaxError):
+            measured_variable_list = []
 
-    if measured_variable:
-        if isinstance(measured_variable, str):
-            # CSV-ish string
-            variables = [v.strip() for v in measured_variable.split(",") if v.strip()]
-        elif isinstance(measured_variable, list):
-            # list[str] or list[dict]
-            for v in measured_variable:
-                if isinstance(v, str) and v.strip():
-                    variables.append(v.strip())
-                elif isinstance(v, dict):
-                    name = (v.get("name") or "").strip()
-                    if name:
-                        variables.append(name)
+    if isinstance(measured_variable_list, list):
+        for var_dict in measured_variable_list:
+            if isinstance(var_dict, dict):
+                var_name = (var_dict.get("measured_variable_name") or "").strip()
+                var_id = (var_dict.get("measured_variable_identifier") or "").strip()
+                var_id_type = (var_dict.get("measured_variable_identifier_type") or "").strip()
+                if var_name:
+                    descriptions.append(
+                        {
+                            "descriptionType": "TechnicalInfo",
+                            "description": f"Measured Variable: {var_name}" + (f" ({var_id_type}: {var_id})" if var_id else ""),
+                        }
+                    )
 
-    # Deduplicate while preserving order
-    seen = set()
-    variables = [v for v in variables if not (v in seen or seen.add(v))]
-
-    if variables:
-        descriptions.append(
-            {
-                "descriptionType": "TechnicalInfo",
-                "description": "Measured Variable(s): " + ", ".join(variables),
-            }
-        )
 
     # ----------------------------
     # TechnicalInfo: Instrument Types
     # ----------------------------
     # Add each instrument type as a separate TechnicalInfo description
     # Store the first instrument type name for use in resourceType field
-    instrument_type_list_gcmd = pkg_dict.get("instrument_type_gcmd", [])
-    if isinstance(instrument_type_list_gcmd, str):
-        try:
-            instrument_type_list_gcmd = ast.literal_eval(instrument_type_list_gcmd)
-        except (ValueError, SyntaxError):
-            instrument_type_list_gcmd = []
-
-    if isinstance(instrument_type_list_gcmd, list):
-        for instrument_type_gcmd in instrument_type_list_gcmd:
-            if isinstance(instrument_type_gcmd, str):
-                type_name = instrument_type_gcmd
-                if type_name:
-                    # Add as separate TechnicalInfo description (no prefix text)
-                    descriptions.append(
-                        {
-                            "descriptionType": "TechnicalInfo",
-                            "description": f"{type_name} (GCMD)",
-                        }
-                    )
-                    # Store first instrument type name for resourceType
-                    if optional.get('instrumentType') is None:
-                        optional['instrumentType'] = type_name
-
-
     instrument_type_list = pkg_dict.get("instrument_type", [])
     if isinstance(instrument_type_list, str):
         try:
@@ -577,18 +546,20 @@ def build_metadata_dict(pkg_dict):
     if isinstance(instrument_type_list, list):
         for type_dict in instrument_type_list:
             if isinstance(type_dict, dict):
-                type_name = (type_dict.get("instrument_type_name") or "").strip()
-                if type_name:
+                inst_type_name = (type_dict.get("instrument_type_name") or "").strip()
+                inst_type_id = (type_dict.get("instrument_type_identifier") or "").strip()
+                inst_type_id_type = (type_dict.get("instrument_type_identifier_type") or "").strip
+                if inst_type_name:
                     # Add as separate TechnicalInfo description (no prefix text)
                     descriptions.append(
                         {
                             "descriptionType": "TechnicalInfo",
-                            "description": type_name,
+                            "description": f"{inst_type_name}" + (f" ({inst_type_id_type}: {inst_type_id})" if inst_type_id else ""),
                         }
                     )
                     # Store first instrument type name for resourceType
                     if optional.get('instrumentType') is None:
-                        optional['instrumentType'] = type_name
+                        optional['instrumentType'] = inst_type_name
 
     optional["descriptions"] = descriptions
 
