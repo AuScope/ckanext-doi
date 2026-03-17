@@ -554,7 +554,7 @@ def build_metadata_dict(pkg_dict):
                     descriptions.append(
                         {
                             "descriptionType": "TechnicalInfo",
-                            "description": f"{inst_type_name}" + (f" ({inst_type_id_type}: {inst_type_id})" if inst_type_id else ""),
+                            "description": f"Instrument Type: {inst_type_name}" + (f" ({inst_type_id_type}: {inst_type_id})" if inst_type_id else ""),
                         }
                     )
                     # Store first instrument type name for resourceType
