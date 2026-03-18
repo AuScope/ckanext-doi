@@ -4,11 +4,15 @@
 # This file is part of ckanext-doi
 # Created by the Natural History Museum in London, UK
 
+import re
 from datetime import datetime
 
 import dateutil.parser as parser
 from ckan.plugins import toolkit
 from ckantools.config import get_debug, get_setting
+
+# Matches partial ISO 8601 dates: YYYY or YYYY-MM (but NOT YYYY-MM-DD)
+_PARTIAL_DATE_RE = re.compile(r'^\d{4}(-\d{2})?$')
 
 
 def package_get_year(pkg_dict):
@@ -48,13 +52,20 @@ def date_or_none(date_object_or_string):
     """
     Try and convert the given object into a datetime; if not possible, return None.
 
+    Partial ISO 8601 date strings (YYYY or YYYY-MM) are returned as-is to preserve
+    their granularity — dateutil.parser.parse would otherwise fill the missing day or
+    month with today's values, producing a misleadingly precise result.
+
     :param date_object_or_string: a datetime or date string
-    :return: datetime or None
+    :return: datetime, str (for partial dates), or None
     """
     if isinstance(date_object_or_string, datetime):
         return date_object_or_string
     elif isinstance(date_object_or_string, str):
-        return parser.parse(date_object_or_string)
+        stripped = date_object_or_string.strip()
+        if _PARTIAL_DATE_RE.match(stripped):
+            return stripped
+        return parser.parse(stripped)
     else:
         return None
 
