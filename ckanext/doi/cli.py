@@ -3,6 +3,7 @@ from ckan import model
 from ckan.model import Session
 from ckan.plugins import toolkit
 from datacite.errors import DataCiteError
+from sqlalchemy import inspect as sa_inspect
 
 from ckanext.doi.lib.api import DataciteClient
 from ckanext.doi.lib.metadata import build_metadata_dict, build_xml_dict
@@ -22,16 +23,19 @@ def doi():
 
 @doi.command(name='initdb')
 def init_db():
-    if not model.package_table.exists():
+    engine = model.meta.engine
+    inspector = sa_inspect(engine)
+
+    if not inspector.has_table('package'):
         click.secho(
             'Package table must exist before initialising the DOI table', fg='red'
         )
         raise click.Abort()
 
-    if doi_model.doi_table.exists():
+    if inspector.has_table('doi'):
         click.secho('DOI table already exists', fg='green')
     else:
-        doi_model.doi_table.create()
+        doi_model.doi_table.create(bind=engine)
         click.secho('DOI table created', fg='green')
 
 

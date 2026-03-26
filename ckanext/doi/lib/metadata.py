@@ -181,6 +181,7 @@ def build_metadata_dict(pkg_dict):
         'geoLocations': [],
         'fundingReferences': [],
         'instrumentType': None,
+        'instrumentClassification': None,
     }
 
     # SUBJECTS
@@ -530,6 +531,11 @@ def build_metadata_dict(pkg_dict):
                         }
                     )
 
+    # ----------------------------
+    # Instrument Class
+    # ----------------------------
+    optional['instrumentClassification'] = pkg_dict.get("instrument_classification", "")
+
 
     # ----------------------------
     # TechnicalInfo: Instrument Types
@@ -693,8 +699,8 @@ def build_xml_dict(metadata_dict):
         # Check if this is an instrument dataset (PIDINST schema)
         # Default to "Instrument" for instrument registries, fallback to "Dataset"
         resource_type_general = "Instrument"
-        # Use first instrumentType from metadata if available, otherwise use generic fallback
-        resource_type = metadata_dict.get('instrumentType') or "Instrument (unspecified type)"
+        # Use first instrumentClassification from metadata if available, otherwise use generic fallback
+        resource_type = metadata_dict.get('instrumentClassification') or "Instrument (unspecified type)"
 
     # Get schema version from config (default 4.5)
     schema_version = toolkit.config.get('ckanext.doi.datacite_schema_version', '4.5')
