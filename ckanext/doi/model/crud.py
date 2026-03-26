@@ -28,7 +28,13 @@ class DOIQuery:
             identifier=identifier, package_id=package_id, published=published
         )
         Session.add(new_record)
-        Session.commit()
+        # Use flush rather than commit so the INSERT is sent within the
+        # current transaction.  after_dataset_create is called before the
+        # outer package_create transaction commits, so a hard commit here
+        # would try to reference a package row that doesn't exist yet in the
+        # committed state, causing a ForeignKeyViolation.  flush() makes the
+        # row visible inside the transaction without ending it.
+        Session.flush()
         return new_record
 
     @classmethod
