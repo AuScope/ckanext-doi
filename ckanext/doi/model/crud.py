@@ -77,7 +77,12 @@ class DOIQuery:
         """
         update_dict = {k: v for k, v in kwargs.items() if k in cls.cols}
         Session.query(DOI).filter(DOI.identifier == identifier).update(update_dict)
-        Session.commit()
+        # Use flush rather than commit so the UPDATE is sent within the current
+        # transaction.  after_dataset_update is triggered from resource_create via
+        # package_update(defer_commit=True); a hard commit here would expire all ORM
+        # objects (including context['package']), causing resource_create to fail
+        # with IndexError when it accesses package.resources[-1].
+        Session.flush()
         return cls.read_doi(identifier)
 
     @classmethod
@@ -92,7 +97,8 @@ class DOIQuery:
         """
         update_dict = {k: v for k, v in kwargs.items() if k in cls.cols}
         Session.query(DOI).filter(DOI.package_id == package_id).update(update_dict)
-        Session.commit()
+        # Use flush rather than commit — see update_doi comment above.
+        Session.flush()
         return cls.read_package(package_id)
 
     @classmethod
