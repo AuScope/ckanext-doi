@@ -3,7 +3,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║  DataCite 4.7 + PIDINST Extension Test Suite           ║" -ForegroundColor Cyan
+Write-Host "║  DataCite 4.7 + PIDINST Extension Test Suite             ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 

@@ -340,7 +340,7 @@ def build_metadata_dict(pkg_dict):
             
             if date_value and date_value != '':
                 try:
-                    parsed_date = date_or_none(date_value)
+                    parsed_date = date_or_none(date_value, date_type=date_type)
                     if parsed_date:
                         if date_type in _DATACITE_DATE_TYPES:
                             date_entry = {
@@ -761,16 +761,17 @@ def build_xml_dict(metadata_dict):
         if k == 'dates':
             item = []
             for date_entry in v:
-                date_entry_copy = {k: v for k, v in date_entry.items()}
-                # Convert datetime to ISO 8601 date format (YYYY-MM-DD)
-                date_value = date_entry_copy['date']
-                if hasattr(date_value, 'date'):
-                    # datetime object - extract date part
-                    date_entry_copy['date'] = date_value.date().isoformat()
+                entry = dict(date_entry)
+                raw = entry.get('date')
+                if isinstance(raw, datetime.datetime):
+                    entry['date'] = raw.date().isoformat()
+                elif isinstance(raw, datetime.date):
+                    entry['date'] = raw.isoformat()
+                elif isinstance(raw, str):
+                    pass  # preserve as-is (partial dates, Coverage ranges, etc.)
                 else:
-                    # Already a string or other format
-                    date_entry_copy['date'] = str(date_value)
-                item.append(date_entry_copy)
+                    continue  # skip entries with None or unsupported values
+                item.append(entry)
             xml_dict[k] = item
         else:
             xml_dict[k] = v

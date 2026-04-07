@@ -488,6 +488,84 @@ def test_pidinst_date_xml_format():
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage():
+    """Test that PIDINST Coverage dates map to DataCite dateType Coverage and preserve RKMS-ISO8601 ranges."""
+    pkg_with_dates = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_dates['date'] = [
+        {
+            'date_value': '2023-05-15',
+            'date_type': 'Commissioned'
+        },
+        {
+            'date_value': '2026-01-01/2026-04-06',
+            'date_type': 'Coverage'
+        }
+    ]
+
+    metadata_dict = build_metadata_dict(pkg_with_dates)
+
+    assert 'dates' in metadata_dict
+
+    coverage_dates = [
+        d for d in metadata_dict['dates']
+        if d.get('dateType') == 'Coverage'
+    ]
+
+    assert len(coverage_dates) == 1
+    assert coverage_dates[0]['date'] == '2026-01-01/2026-04-06'
+
+    # Commissioned should still map to Other with dateInformation
+    commissioned_dates = [
+        d for d in metadata_dict['dates']
+        if d.get('dateType') == 'Other' and d.get('dateInformation') == 'Commissioned'
+    ]
+
+    assert len(commissioned_dates) == 1
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_xml_format():
+    """Test that Coverage dates remain unchanged in XML dict and preserve RKMS-ISO8601 syntax."""
+    pkg_with_dates = dict(PIDINST_INSTRUMENT_PKG)
+    pkg_with_dates['date'] = [
+        {
+            'date_value': '2012/',
+            'date_type': 'Coverage'
+        },
+        {
+            'date_value': '/2026-04-06',
+            'date_type': 'Coverage'
+        },
+        {
+            'date_value': '2026-01-01/2026-04-06',
+            'date_type': 'Coverage'
+        }
+    ]
+
+    metadata_dict = build_metadata_dict(pkg_with_dates)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    assert 'dates' in xml_dict
+
+    coverage_dates = [
+        d for d in xml_dict['dates']
+        if d.get('dateType') == 'Coverage'
+    ]
+
+    assert len(coverage_dates) == 3
+
+    values = [d['date'] for d in coverage_dates]
+    assert '2012/' in values
+    assert '/2026-04-06' in values
+    assert '2026-01-01/2026-04-06' in values
+
+    for date_entry in coverage_dates:
+        date_str = date_entry['date']
+        assert isinstance(date_str, str), f"Coverage date should be string, got {type(date_str)}"
+        assert ' ' not in date_str, f"Coverage date should not contain spaces, got {date_str}"
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
 def test_pidinst_funding_basic():
     """Test that PIDINST 'funder' field with basic funder_name maps to DataCite fundingReferences"""
     pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
@@ -765,3 +843,183 @@ def test_date_type_coverage_validation():
 
     # Should not raise
     datacite_compat.validator.validate(xml_dict)
+
+
+# ---------------------------------------------------------------------------
+# Partial dates for Commissioned / DeCommissioned
+# ---------------------------------------------------------------------------
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_commissioned_partial_year():
+    """Commissioned with YYYY must be preserved without fake precision."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '2023', 'date_type': 'Commissioned'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    commissioned = [
+        d for d in xml_dict['dates']
+        if d.get('dateType') == 'Other' and d.get('dateInformation') == 'Commissioned'
+    ]
+    assert len(commissioned) == 1
+    assert commissioned[0]['date'] == '2023'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_commissioned_partial_year_month():
+    """Commissioned with YYYY-MM must be preserved without fake precision."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '2023-05', 'date_type': 'Commissioned'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    commissioned = [
+        d for d in xml_dict['dates']
+        if d.get('dateType') == 'Other' and d.get('dateInformation') == 'Commissioned'
+    ]
+    assert len(commissioned) == 1
+    assert commissioned[0]['date'] == '2023-05'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_decommissioned_lowercase():
+    """Decommissioned (lowercase 'c') maps to dateType=Other with dateInformation preserved."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '2024-12-31', 'date_type': 'Decommissioned'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+
+    other_dates = [
+        d for d in metadata_dict['dates']
+        if d.get('dateType') == 'Other' and d.get('dateInformation') == 'Decommissioned'
+    ]
+    assert len(other_dates) == 1
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_commissioned_xml_exact_strings():
+    """Commissioned/DeCommissioned dates in XML dict must be exact ISO strings."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [
+        {'date_value': '2023-05-15', 'date_type': 'Commissioned'},
+        {'date_value': '2024-12-31', 'date_type': 'DeCommissioned'},
+    ]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    commissioned = [
+        d for d in xml_dict['dates']
+        if d.get('dateType') == 'Other' and d.get('dateInformation') == 'Commissioned'
+    ]
+    decommissioned = [
+        d for d in xml_dict['dates']
+        if d.get('dateType') == 'Other' and d.get('dateInformation') == 'DeCommissioned'
+    ]
+
+    assert len(commissioned) == 1
+    assert commissioned[0]['date'] == '2023-05-15'
+    assert len(decommissioned) == 1
+    assert decommissioned[0]['date'] == '2024-12-31'
+
+
+# ---------------------------------------------------------------------------
+# Coverage — exact string preservation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_open_start():
+    """/YYYY-MM-DD is preserved as-is in the XML dict."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '/2026-04-06', 'date_type': 'Coverage'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    coverage = [d for d in xml_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(coverage) == 1
+    assert coverage[0]['date'] == '/2026-04-06'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_open_end():
+    """YYYY/ is preserved as-is in the XML dict."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '2012/', 'date_type': 'Coverage'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    coverage = [d for d in xml_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(coverage) == 1
+    assert coverage[0]['date'] == '2012/'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_full_range():
+    """YYYY-MM-DD/YYYY-MM-DD is preserved as-is in the XML dict."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '2026-01-01/2026-04-06', 'date_type': 'Coverage'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    coverage = [d for d in xml_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(coverage) == 1
+    assert coverage[0]['date'] == '2026-01-01/2026-04-06'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_single_year():
+    """Coverage with a single YYYY is preserved as-is."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '2024', 'date_type': 'Coverage'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    coverage = [d for d in xml_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(coverage) == 1
+    assert coverage[0]['date'] == '2024'
+
+
+# ---------------------------------------------------------------------------
+# Coverage — invalid values
+# ---------------------------------------------------------------------------
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_invalid_bare_slash():
+    """'/' alone is invalid for Coverage — should not produce a date entry."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '/', 'date_type': 'Coverage'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+
+    coverage = [d for d in metadata_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(coverage) == 0
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_invalid_month():
+    """2026-13-01/2026-04-06 has invalid month — should not produce a date entry."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': '2026-13-01/2026-04-06', 'date_type': 'Coverage'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+
+    coverage = [d for d in metadata_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(coverage) == 0
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_date_coverage_invalid_malformed():
+    """Malformed range 'abc/def' should not produce a date entry."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [{'date_value': 'abc/def', 'date_type': 'Coverage'}]
+
+    metadata_dict = build_metadata_dict(pkg)
+
+    coverage = [d for d in metadata_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(coverage) == 0
