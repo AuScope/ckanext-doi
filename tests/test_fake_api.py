@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from ckanext.doi.lib.api import FakeDataciteClient, get_client, DataciteClient
 from ckanext.doi.model.crud import DOIQuery
-from datacite import schema45
+from ckanext.doi.lib import datacite_compat
 
 
 @pytest.mark.ckan_config('ckanext.doi.prefix', '10.5555')

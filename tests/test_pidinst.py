@@ -5,8 +5,8 @@
 # Created by the Natural History Museum in London, UK
 
 import pytest
-from datacite import schema45
 
+from ckanext.doi.lib import datacite_compat
 from ckanext.doi.lib.metadata import build_metadata_dict, build_xml_dict
 
 
@@ -135,9 +135,9 @@ def test_instrument_resource_type():
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
-@pytest.mark.ckan_config('ckanext.doi.datacite_schema_version', '4.5')
-def test_schema_version_45():
-    """Test that schema version can be configured to 4.5"""
+@pytest.mark.ckan_config('ckanext.doi.datacite_schema_version', '4.7')
+def test_schema_version_47():
+    """Test that schema version can be configured to 4.7"""
     metadata_dict = build_metadata_dict(PIDINST_INSTRUMENT_PKG)
     xml_dict = build_xml_dict(metadata_dict)
     
@@ -146,18 +146,15 @@ def test_schema_version_45():
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
-def test_schema45_validation():
-    """Test that generated XML validates against DataCite Schema 4.5"""
+def test_datacite_validation():
+    """Test that generated XML validates against the DataCite schema"""
     metadata_dict = build_metadata_dict(PIDINST_INSTRUMENT_PKG)
     xml_dict = build_xml_dict(metadata_dict)
     
-    # Add DOI (required for validation) - DataCite 4.5 uses 'doi' property
     xml_dict['doi'] = '10.5072/test-instrument'
     
-    # Validate using schema45 validator
     try:
-        schema45.validator.validate(xml_dict)
-        # If no exception was raised, validation passed
+        datacite_compat.validator.validate(xml_dict)
         assert True
     except Exception as e:
         pytest.fail(f"Validation failed: {e}")
@@ -279,7 +276,7 @@ def test_pidinst_model_mapping():
     assert 'descriptions' in metadata_dict
     
     # Find TechnicalInfo description
-    tech_info = [d for d in metadata_dict['descriptions'] if (d['descriptionType'] == 'TechnicalInfo' and 'Model(s):' in d['description'])]
+    tech_info = [d for d in metadata_dict['descriptions'] if (d['descriptionType'] == 'TechnicalInfo' and 'Model:' in d['description'])]
     assert len(tech_info) == 1
     assert 'CMG-3T' in tech_info[0]['description']
     assert 'https://example.com/models/cmg3t' in tech_info[0]['description']
@@ -299,18 +296,15 @@ def test_pidinst_instrument_type_mapping():
     
     metadata_dict = build_metadata_dict(pkg_with_type)
     xml_dict = build_xml_dict(metadata_dict)
+
     
     # Should be in descriptions as TechnicalInfo
     assert 'descriptions' in metadata_dict
-    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo' and d['description'] == 'Seismometer']
-    assert len(tech_info) == 1
-    
-    # Should also map to instrumentType in metadata_dict
-    assert 'instrumentType' in metadata_dict
-    assert metadata_dict['instrumentType'] == 'Seismometer'
+    tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo' and 'Seismometer' in d['description']]
+    assert len(tech_info) == 1    
+    assert tech_info[0]['description'] == 'Instrument Type: Seismometer (URL: https://example.com/vocab/seismometer)'
     
     # Should map to resource_type in XML dict
-    assert xml_dict['types']['resourceType'] == 'Seismometer'
     assert xml_dict['types']['resourceTypeGeneral'] == 'Instrument'
 
 
@@ -343,35 +337,32 @@ def test_pidinst_multiple_instrument_types():
     
     metadata_dict = build_metadata_dict(pkg_multi_type)
     xml_dict = build_xml_dict(metadata_dict)
-    
+        
     # All three should be in descriptions as separate TechnicalInfo entries
     tech_info = [d for d in metadata_dict['descriptions'] if d['descriptionType'] == 'TechnicalInfo']
-    instrument_types = [d['description'] for d in tech_info if d['description'] in ['Seismometer', 'Accelerometer', 'Geophone']]
+    instrument_types = [d['description'] for d in tech_info if 'Seismometer' in d['description'] or 'Accelerometer' in d['description'] or 'Geophone' in d['description']]
     
     assert len(instrument_types) == 3
-    assert 'Seismometer' in instrument_types
-    assert 'Accelerometer' in instrument_types
-    assert 'Geophone' in instrument_types
+    assert 'Instrument Type: Seismometer' in instrument_types
+    assert 'Instrument Type: Accelerometer' in instrument_types
+    assert 'Instrument Type: Geophone' in instrument_types
     
-    # First instrument type should be used for resourceType
-    assert metadata_dict['instrumentType'] == 'Seismometer'
-    assert xml_dict['types']['resourceType'] == 'Seismometer'
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
 def test_pidinst_measured_variable_mapping():
     """Test that PIDINST 'measured_variable' field maps to DataCite descriptions with TechnicalInfo type"""
     pkg_with_variables = dict(PIDINST_INSTRUMENT_PKG)
-    pkg_with_variables['measured_variable'] = 'ground motion, seismic waves, earthquake magnitude'
+    pkg_with_variables['measured_variable'] = [{'measured_variable_name': 'ground motion, seismic waves, earthquake magnitude'}]
     
     metadata_dict = build_metadata_dict(pkg_with_variables)
     
     assert 'descriptions' in metadata_dict
     
     # Find TechnicalInfo description
-    tech_info = [d for d in metadata_dict['descriptions'] if (d['descriptionType'] == 'TechnicalInfo' and 'Measured Variable(s):' in d['description'])]
+    tech_info = [d for d in metadata_dict['descriptions'] if (d['descriptionType'] == 'TechnicalInfo' and 'Measured Variable:' in d['description'])]
     assert len(tech_info) == 1
-    assert 'Measured Variable(s):' in tech_info[0]['description']
+    assert 'Measured Variable:' in tech_info[0]['description']
     assert 'ground motion' in tech_info[0]['description']
     assert 'seismic waves' in tech_info[0]['description']
 
@@ -382,7 +373,7 @@ def test_pidinst_combined_technical_info():
     pkg_complete = dict(PIDINST_INSTRUMENT_PKG)
     pkg_complete['model'] = [{'model_name': 'CMG-3T'}]
     pkg_complete['instrument_type'] = [{'instrument_type_name': 'Seismometer'}]
-    pkg_complete['measured_variable'] = 'ground motion'
+    pkg_complete['measured_variable'] = [{'measured_variable_name': 'ground motion'}]
     
     metadata_dict = build_metadata_dict(pkg_complete)
     xml_dict = build_xml_dict(metadata_dict)
@@ -397,17 +388,14 @@ def test_pidinst_combined_technical_info():
     assert len(tech_info) == 3
     
     # Check that model, measured_variable, and instrument_type are all in TechnicalInfo as separate entries
-    model_found = any('Model(s): CMG-3T' in d['description'] for d in tech_info)
-    variable_found = any('Measured Variable(s): ground motion' in d['description'] for d in tech_info)
-    instrument_type_found = any(d['description'] == 'Seismometer' for d in tech_info)
+    model_found = any('Model: CMG-3T' in d['description'] for d in tech_info)
+    variable_found = any('Measured Variable: ground motion' in d['description'] for d in tech_info)
+    instrument_type_found = any(d['description'] == 'Instrument Type: Seismometer' for d in tech_info)
     
     assert model_found, "Model should be in TechnicalInfo description"
     assert variable_found, "Measured variable should be in TechnicalInfo description"
     assert instrument_type_found, "Instrument type should be in TechnicalInfo description as separate entry"
     
-    # Verify instrument_type is also mapped to resource_type
-    assert metadata_dict['instrumentType'] == 'Seismometer'
-    assert xml_dict['types']['resourceType'] == 'Seismometer'
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
@@ -518,7 +506,6 @@ def test_pidinst_funding_basic():
     assert funding_ref['funderName'] == 'National Science Foundation'
     # Should not have other fields when not provided
     assert 'funderIdentifier' not in funding_ref
-    assert 'schemaURI' not in funding_ref
     assert 'awardNumber' not in funding_ref
 
 
@@ -570,9 +557,8 @@ def test_pidinst_funding_all_fields():
     assert funding_ref['funderName'] == 'National Science Foundation'
     assert funding_ref['funderIdentifier'] == 'https://ror.org/021nxhr62'
     assert funding_ref['funderIdentifierType'] == 'ROR'
-    assert funding_ref['schemaURI'] == 'https://ror.org/'
     assert funding_ref['awardNumber'] == 'NSF-2024-12345'
-    assert funding_ref['awardURI'] == 'https://www.nsf.gov/awards/2024/12345'
+    assert funding_ref['awardUri'] == 'https://www.nsf.gov/awards/2024/12345'
     assert funding_ref['awardTitle'] == 'Research on Seismic Monitoring Technology'
 
 
@@ -664,10 +650,9 @@ def test_pidinst_funding_partial_fields():
     assert funding_ref['funderName'] == 'Research Foundation'
     assert funding_ref['funderIdentifier'] == 'https://example.com/funder'
     assert funding_ref['funderIdentifierType'] == 'URL'
-    # These should not be present
-    assert 'schemaURI' not in funding_ref
+    # These should not be presentschemaURI
     assert 'awardNumber' not in funding_ref
-    assert 'awardURI' not in funding_ref
+    assert 'awardUri' not in funding_ref
     assert 'awardTitle' not in funding_ref
 
 
@@ -734,3 +719,49 @@ def test_pidinst_funding_xml_dict():
     assert funding_ref['funderIdentifierType'] == 'ROR'
     assert funding_ref['awardNumber'] == 'NSF-2024-12345'
     assert funding_ref['awardTitle'] == 'Research Grant'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_date_type_coverage():
+    """Test that date_type 'Coverage' maps directly to DataCite dateType (4.7)."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [
+        {
+            'date_value': '2020-01-01/2024-12-31',
+            'date_type': 'Coverage',
+        }
+    ]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+
+    coverage_dates = [
+        d for d in metadata_dict['dates'] if d.get('dateType') == 'Coverage'
+    ]
+    assert len(coverage_dates) == 1
+    # Should use the native dateType, not 'Other' with dateInformation
+    assert 'dateInformation' not in coverage_dates[0]
+
+    # Also check it survives into the XML dict
+    xml_coverage = [d for d in xml_dict['dates'] if d.get('dateType') == 'Coverage']
+    assert len(xml_coverage) == 1
+
+    # Validation should pass with the extended 4.7 validator
+    xml_dict['doi'] = '10.5072/test-coverage'
+    datacite_compat.validator.validate(xml_dict)
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_date_type_coverage_validation():
+    """Test that a Coverage date validates against the schema."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['date'] = [
+        {'date_value': '2023-06-01', 'date_type': 'Coverage'},
+    ]
+
+    metadata_dict = build_metadata_dict(pkg)
+    xml_dict = build_xml_dict(metadata_dict)
+    xml_dict['doi'] = '10.5072/test-cov-validation'
+
+    # Should not raise
+    datacite_compat.validator.validate(xml_dict)

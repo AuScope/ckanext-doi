@@ -26,14 +26,14 @@ def build_metadata_dict(pkg_dict):
     This function implements PIDINST-based mapping for instrument registries,
     with fallback support for traditional dataset metadata.
 
-    PIDINST Mapping (per DataCite schema 4.5):
+    PIDINST Mapping (per DataCite schema 4.7):
     - creators: from 'manufacturer' field (instrument manufacturers/developers)
     - contributors: from 'owner' field (HostingInstitution | DataCollector | Sponsor - responsible organizations)
     - alternateIdentifiers: from 'alternate_identifier_obj' field
     - relatedIdentifiers: from 'related_identifier_obj' field
     - types.resourceTypeGeneral: "Instrument" (DataCite 4.5+)
     
-    Reference: https://datacite-metadata-schema.readthedocs.io/en/4.5/mappings/pidinst/
+    Reference: https://datacite-metadata-schema.readthedocs.io/en/4.7/mappings/pidinst/
 
     Legacy Dataset Mapping (fallback for backwards compatibility):
     - creators/contributors: from 'author' field
@@ -41,7 +41,7 @@ def build_metadata_dict(pkg_dict):
     - types.resourceTypeGeneral: "Dataset"
 
     Configuration:
-    - ckanext.doi.datacite_schema_version: DataCite schema version (default: 4.5)
+    - ckanext.doi.datacite_schema_version: DataCite schema version (default: 4.7)
     - ckanext.doi.resource_type: resourceTypeGeneral (default: Instrument)
     - ckanext.doi.publisher: required publisher name
 
@@ -70,7 +70,7 @@ def build_metadata_dict(pkg_dict):
 
     # CREATORS
     # For PIDINST instrument schema, map 'manufacturer' field as creators (instrument developers/producers)
-    # Per DataCite PIDINST mapping: https://datacite-metadata-schema.readthedocs.io/en/4.5/mappings/pidinst/
+    # Per DataCite PIDINST mapping: https://datacite-metadata-schema.readthedocs.io/en/4.7/mappings/pidinst/
     try:
         creators_list = []
         manufacturer_list = pkg_dict.get('manufacturer', [])
@@ -200,7 +200,7 @@ def build_metadata_dict(pkg_dict):
 
     # CONTRIBUTORS
     # For PIDINST instrument schema, map 'owner' field as contributors with role 'HostingInstitution'
-    # Per DataCite PIDINST mapping: https://datacite-metadata-schema.readthedocs.io/en/4.5/mappings/pidinst/
+    # Per DataCite PIDINST mapping: https://datacite-metadata-schema.readthedocs.io/en/4.7/mappings/pidinst/
     try:
         contributors_list = []
         owner_list = pkg_dict.get('owner', [])
@@ -314,8 +314,13 @@ def build_metadata_dict(pkg_dict):
         except Exception as e:
             date_errors['doi_date_published'] = e
     
-    # Add PIDINST date field (Commissioned/DeCommissioned)
-    # Per DataCite PIDINST mapping: use dateType "Other" with dateInformation
+    # Add PIDINST date field (Commissioned/DeCommissioned/Coverage/etc.)
+    # If date_type matches a DataCite dateType value, use it directly;
+    # otherwise fall back to dateType "Other" with dateInformation.
+    _DATACITE_DATE_TYPES = {
+        'Accepted', 'Available', 'Copyrighted', 'Collected', 'Coverage',
+        'Created', 'Issued', 'Submitted', 'Updated', 'Valid', 'Withdrawn', 'Other',
+    }
     date_list = pkg_dict.get('date', [])
     log.debug(f'PIDINST date field raw value: {date_list}')
     
@@ -337,11 +342,17 @@ def build_metadata_dict(pkg_dict):
                 try:
                     parsed_date = date_or_none(date_value)
                     if parsed_date:
-                        date_entry = {
-                            'dateType': 'Other',
-                            'date': parsed_date,
-                            'dateInformation': date_type  # "Commissioned" or "DeCommissioned"
-                        }
+                        if date_type in _DATACITE_DATE_TYPES:
+                            date_entry = {
+                                'dateType': date_type,
+                                'date': parsed_date,
+                            }
+                        else:
+                            date_entry = {
+                                'dateType': 'Other',
+                                'date': parsed_date,
+                                'dateInformation': date_type,
+                            }
                         log.debug(f'Adding PIDINST date to metadata: {date_entry}')
                         optional['dates'].append(date_entry)
                 except Exception as e:
@@ -388,11 +399,14 @@ def build_metadata_dict(pkg_dict):
         if isinstance(rel_list, list):
             for rel in rel_list:
                 if rel.get('related_identifier'):
-                    related_ids.append({
+                    entry = {
                         'relatedIdentifier': rel['related_identifier'],
                         'relatedIdentifierType': rel.get('related_identifier_type', 'URL'),
                         'relationType': rel.get('relation_type', 'References'),
-                    })
+                    }
+                    if rel.get('relation_type_information'):
+                        entry['relationTypeInformation'] = rel['relation_type_information']
+                    related_ids.append(entry)
         # Fallback: legacy related_resource field
         if not related_ids:
             rel_list = pkg_dict.get('related_resource', [])
@@ -481,7 +495,6 @@ def build_metadata_dict(pkg_dict):
         except (ValueError, SyntaxError):
             model_list = []
 
-    model_items: list[str] = []
     if isinstance(model_list, list):
         for model_dict in model_list:
             if not isinstance(model_dict, dict):
@@ -491,21 +504,16 @@ def build_metadata_dict(pkg_dict):
             model_id = (model_dict.get("model_identifier") or "").strip()
             model_id_type = (model_dict.get("model_identifier_type") or "").strip()
 
-            if not model_name:
-                continue
-
-            text = f"{model_name}"
-            if model_id:
-                text += f" ({model_id_type}: {model_id})" if model_id_type else f" (ID: {model_id})"
-            model_items.append(text)
-
-    if model_items:
-        descriptions.append(
-            {
-                "descriptionType": "TechnicalInfo",
-                "description": f"Model(s): " + "; ".join(model_items),
-            }
-        )
+            if model_name:
+                text = f"{model_name}"
+                if model_id:
+                    text += f" ({model_id_type}: {model_id})" if model_id_type else f" (ID: {model_id})"
+                descriptions.append(
+                    {
+                        "descriptionType": "TechnicalInfo",
+                        "description": f"Model: {text}",
+                    }
+                )
 
     # ----------------------------
     # TechnicalInfo: Measured Variables
@@ -554,7 +562,7 @@ def build_metadata_dict(pkg_dict):
             if isinstance(type_dict, dict):
                 inst_type_name = (type_dict.get("instrument_type_name") or "").strip()
                 inst_type_id = (type_dict.get("instrument_type_identifier") or "").strip()
-                inst_type_id_type = (type_dict.get("instrument_type_identifier_type") or "").strip
+                inst_type_id_type = (type_dict.get("instrument_type_identifier_type") or "").strip()
                 if inst_type_name:
                     # Add as separate TechnicalInfo description (no prefix text)
                     descriptions.append(
@@ -619,7 +627,7 @@ def build_metadata_dict(pkg_dict):
                     
                     # NOTE: schemeURI is an XML attribute on <funderIdentifier> in the
                     # DataCite XML schema but has NO equivalent top-level property in
-                    # the JSON representation used by datacite-python schema45.
+                    # the JSON representation used by the datacite library.
                     # It must NOT be included here.
                     
                     # Add award number if present
@@ -678,13 +686,11 @@ def build_metadata_dict(pkg_dict):
 
 def build_xml_dict(metadata_dict):
     """
-    Builds a dictionary that can be passed directly to datacite.schema45.tostring() to
-    generate xml. Previously named metadata_to_xml but renamed as it's not actually
-    producing any xml, it's just formatting the metadata so a separate function can then
-    generate the xml.
+    Builds a dictionary that can be passed to datacite_compat.tostring() to generate
+    XML. Formats the metadata so a separate function can then generate the XML.
 
     :param metadata_dict: a dict of metadata generated from build_metadata_dict
-    :return: dict that can be passed directly to datacite.schema45.tostring()
+    :return: dict that can be passed to datacite_compat.tostring()
     """
     # Determine resource type based on CKAN plugins and dataset type
     # For PIDINST instrument registry, use "Instrument" (DataCite 4.5+)
@@ -702,8 +708,8 @@ def build_xml_dict(metadata_dict):
         # Use first instrumentClassification from metadata if available, otherwise use generic fallback
         resource_type = metadata_dict.get('instrumentClassification') or "Instrument (unspecified type)"
 
-    # Get schema version from config (default 4.5)
-    schema_version = toolkit.config.get('ckanext.doi.datacite_schema_version', '4.5')
+    # Get schema version from config (default 4.7)
+    schema_version = toolkit.config.get('ckanext.doi.datacite_schema_version', '4.7')
     schema_url = f'http://datacite.org/schema/kernel-{schema_version.replace(".", "")[0]}'
 
     # DataCite 4.5+ requires publisher to be an object with 'name' property

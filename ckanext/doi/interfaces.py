@@ -29,12 +29,12 @@ class IDoi(interfaces.Interface):
 
     def build_xml_dict(self, metadata_dict, xml_dict):
         """
-        Converts the metadata_dict into an xml_dict that can be passed to the datacite
-        library's schema42.tostring() and schema42.validate() methods. Extends the
-        build_xml_dict() method from ckanext-doi.
+        Converts the metadata_dict into an xml_dict that can be passed to
+        datacite_compat.tostring() and datacite_compat.validator.validate().
+        Extends the build_xml_dict() method from ckanext-doi.
 
         :param metadata_dict: the metadata dict generated from build_metadata_dict
-        :param xml_dict: XML dict to pass to schema42.validate()
+        :param xml_dict: XML dict to pass to datacite_compat.validator.validate()
         :returns: xml_dict
         """
         return xml_dict

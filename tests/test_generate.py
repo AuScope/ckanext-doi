@@ -6,8 +6,8 @@
 
 import pkg_resources
 import pytest
-from datacite import schema45
 
+from ckanext.doi.lib import datacite_compat
 from ckanext.doi.lib.metadata import build_metadata_dict, build_xml_dict
 from .helpers import constants
 
@@ -47,7 +47,7 @@ def test_generate_xml():
     xml_dict['doi'] = '10.0000/this-would-be-a-doi'
     # Validate
     try:
-        schema45.validator.validate(xml_dict)
+        datacite_compat.validator.validate(xml_dict)
         assert True
     except Exception:
         assert False, "Validation failed"

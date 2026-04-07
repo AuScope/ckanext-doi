@@ -11,8 +11,10 @@ import random
 import xmltodict
 from ckan.plugins import toolkit
 from ckanext.doi.model.crud import DOIQuery
-from datacite import DataCiteMDSClient, schema45
+from datacite import DataCiteMDSClient
 from datacite.errors import DataCiteError, DataCiteNotFoundError
+
+from ckanext.doi.lib import datacite_compat
 from datetime import datetime as dt
 
 from ckanext.doi.lib.helpers import doi_test_mode, doi_dev_mode
@@ -135,15 +137,21 @@ class DataciteClient:
         :param xml_dict: the metadata as an xml dict (generated from build_xml_dict)
         :return:
         """
-        # DataCite schema 4.5 uses 'doi' property, not 'identifiers'
         xml_dict['doi'] = doi
 
-        # check that the data is valid, this will raise a JSON schema exception if there are issues
-        # Skip validation for test DOIs that don't match the real pattern
+        # Validate against the (extended) DataCite 4.7 JSON schema
         if doi.startswith('10.'):
-            schema45.validator.validate(xml_dict)
+            datacite_compat.validator.validate(xml_dict)
 
-        xml_doc = schema45.tostring(xml_dict)
+        xml_doc = datacite_compat.tostring(xml_dict)
+
+        if toolkit.config.get('ckanext.doi.verbose_xml', 'false').lower() in (
+            'true',
+            '1',
+            'yes',
+        ):
+            log.info('DataCite XML for %s:\n%s', doi, xml_doc)
+
         # create the metadata on datacite
         self.client.metadata_post(xml_doc)
 
@@ -185,7 +193,7 @@ class DataciteClient:
         if posted_xml is None or posted_xml.strip() == '':
             return False
         posted_xml_dict = dict(xmltodict.parse(posted_xml).get('resource', {}))
-        new_xml_dict = dict(xmltodict.parse(schema45.tostring(xml_dict))['resource'])
+        new_xml_dict = dict(xmltodict.parse(datacite_compat.tostring(xml_dict))['resource'])
         if 'identifier' in posted_xml_dict:
             del posted_xml_dict['identifier']
         has_dates = 'dates' in posted_xml_dict and 'date' in posted_xml_dict['dates']
@@ -300,13 +308,13 @@ class FakeDataciteClient:
         # Validate the schema if it's a real DOI pattern
         if doi.startswith('10.'):
             try:
-                schema45.validator.validate(xml_dict)
+                datacite_compat.validator.validate(xml_dict)
                 log.info(f'Fake metadata validated for DOI: {doi}')
             except Exception as e:
                 log.warning(f'Validation failed for fake DOI {doi}: {e}')
         
         # Store the metadata
-        xml_doc = schema45.tostring(xml_dict)
+        xml_doc = datacite_compat.tostring(xml_dict)
         self._metadata_store[doi] = xml_doc
         log.info(f'Fake metadata stored for DOI: {doi}')
 
@@ -337,7 +345,7 @@ class FakeDataciteClient:
             return False
         
         posted_xml_dict = dict(xmltodict.parse(posted_xml).get('resource', {}))
-        new_xml_dict = dict(xmltodict.parse(schema45.tostring(xml_dict))['resource'])
+        new_xml_dict = dict(xmltodict.parse(datacite_compat.tostring(xml_dict))['resource'])
         
         # Remove identifiers from both as they may differ
         if 'identifier' in posted_xml_dict:

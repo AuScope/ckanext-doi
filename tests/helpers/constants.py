@@ -116,7 +116,7 @@ METADATA_DICT = {
 }
 
 # minimal example from https://datacite.readthedocs.io/en/latest
-# Updated for DataCite 4.5 schema
+# Updated for DataCite 4.7 schema
 XML_DICT = {
     'doi': '10.4124/abcd1234',
     'creators': [

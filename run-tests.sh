@@ -4,7 +4,7 @@
 set -e
 
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║  DataCite 4.5 + PIDINST Extension Test Suite           ║"
+echo "║  DataCite 4.7 + PIDINST Extension Test Suite           ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
