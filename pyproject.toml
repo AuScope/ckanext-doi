@@ -67,6 +67,11 @@ version_files = [
     "CITATION.cff:^version"
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that call live external services (DataCite)",
+]
+
 [tool.black]
 line-length = 88
 skip_string_normalization = true
