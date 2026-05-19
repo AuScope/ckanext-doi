@@ -190,6 +190,7 @@ ckanext.doi.prefix = 10.5555
 | `ckanext.doi.site_title`              | Site title to use in the citation                                                | None            |
 | `ckanext.doi.datacite_schema_version` | DataCite Metadata Schema version to use (4.3, 4.4, or 4.5)                       | `4.5`           |
 | `ckanext.doi.resource_type`           | Default DataCite resourceTypeGeneral (Dataset, Instrument, PhysicalObject, etc.) | `Instrument`    |
+| `ckanext.doi.package_url_prefix`      | Route segment used when building DOI landing page URLs                           | `dataset`       |
 
 <!--configuration-end-->
 

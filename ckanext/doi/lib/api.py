@@ -17,7 +17,7 @@ from datacite.errors import DataCiteError, DataCiteNotFoundError
 from ckanext.doi.lib import datacite_compat
 from datetime import datetime as dt
 
-from ckanext.doi.lib.helpers import doi_test_mode, doi_dev_mode
+from ckanext.doi.lib.helpers import doi_test_mode, doi_dev_mode, get_package_landing_url
 
 log = logging.getLogger(__name__)
 
@@ -116,10 +116,7 @@ class DataciteClient:
         """
 
         # create the URL the DOI will point to, i.e. the package page
-        site = toolkit.config.get('ckan.site_url')
-        if site[-1] != '/':
-            site += '/'
-        permalink = f'{site}dataset/{package_id}'
+        permalink = get_package_landing_url(package_id)
         # mint the DOI
         self.client.doi_post(doi, permalink)
         if DOIQuery.read_doi(doi) is None and DOIQuery.read_package(package_id) is None:
@@ -277,11 +274,8 @@ class FakeDataciteClient:
         :param package_id: the id of the package this doi is for
         """
         # create the URL the DOI will point to, i.e. the package page
-        site = toolkit.config.get('ckan.site_url')
-        if site[-1] != '/':
-            site += '/'
-        permalink = f'{site}dataset/{package_id}'
-        
+        permalink = get_package_landing_url(package_id)
+
         # Store the DOI->URL mapping in memory (fake minting)
         self._doi_store[doi] = permalink
         log.info(f'Fake minted DOI: {doi} -> {permalink}')

@@ -14,7 +14,7 @@ from ckan.plugins import PluginImplementations, toolkit
 
 from ckanext.doi.interfaces import IDoi
 from ckanext.doi.lib.errors import DOIMetadataException
-from ckanext.doi.lib.helpers import date_or_none, get_site_url, package_get_year
+from ckanext.doi.lib.helpers import date_or_none, get_site_url, get_package_landing_url, package_get_year
 
 log = logging.getLogger(__name__)
 
@@ -370,7 +370,7 @@ def build_metadata_dict(pkg_dict):
     # add permalink back to this site, plus PIDINST alternate_identifier_obj if present
     try:
         alternate_ids = []
-        permalink = f'{get_site_url()}/dataset/{pkg_dict["id"]}'
+        permalink = get_package_landing_url(pkg_dict['id'])
         alternate_ids.append(
             {'alternateIdentifierType': 'URL', 'alternateIdentifier': permalink}
         )

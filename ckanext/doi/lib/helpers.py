@@ -178,3 +178,26 @@ def doi_dev_mode():
     :return: bool
     """
     return toolkit.asbool(get_setting('ckanext.doi.dev_mode', default=False))
+
+
+def get_package_landing_url(package_id):
+    """
+    Build the landing page URL for a given package/dataset.
+
+    Uses ``ckan.site_url`` (or ``ckanext.doi.site_url`` if set) as the base,
+    and the ``ckanext.doi.package_url_prefix`` config option as the route segment.
+    Defaults to ``dataset`` so existing deployments are unaffected.
+
+    Example with default config:
+        https://data.example.org/dataset/abc123
+
+    Example with ``ckanext.doi.package_url_prefix = instrument``:
+        https://data.example.org/instrument/abc123
+
+    :param package_id: the CKAN package id or name
+    :return: fully-qualified landing page URL as a string
+    """
+    prefix = toolkit.config.get(
+        'ckanext.doi.package_url_prefix', 'dataset'
+    ).strip('/')
+    return f'{get_site_url()}/{prefix}/{package_id}'

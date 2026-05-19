@@ -44,6 +44,7 @@ ckanext.doi.site_title = AuScope Instrument Registry
 | `ckanext.doi.resource_type`           | ❌       | `Instrument`    | Default resourceTypeGeneral      | See below           |
 | `ckanext.doi.site_url`                | ❌       | `ckan.site_url` | Landing page base URL            | URL                 |
 | `ckanext.doi.site_title`              | ❌       | -               | Site title for citations         | String              |
+| `ckanext.doi.package_url_prefix`      | ❌       | `dataset`       | Route segment for DOI landing page URLs (e.g. `instrument`) | String |
 
 ## Resource Type Values
 
