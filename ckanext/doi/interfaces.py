@@ -12,6 +12,19 @@ class IDoi(interfaces.Interface):
     Hook into IDoi.
     """
 
+    def should_manage_doi(self, pkg_dict):
+        """
+        Return whether ckanext-doi should create, mint, update, and expose a
+        DOI table record for this package.
+
+        Implementations can return False for packages whose identifiers are
+        managed outside ckanext-doi/DataCite.
+
+        :param pkg_dict: package dictionary
+        :returns: True when ckanext-doi should manage the DOI, False otherwise
+        """
+        return True
+
     def build_metadata_dict(self, pkg_dict, metadata_dict, errors):
         """
         Extracts metadata from a pkg_dict for use in generating datacite DOIs. Extends
