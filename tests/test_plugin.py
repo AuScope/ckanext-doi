@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from datacite.errors import DataCiteNotFoundError
@@ -79,13 +79,53 @@ class TestDOIPlugin:
         assert not mock_client.metadata_post.called
         assert not mock_client.doi_post.called
 
+    def test_after_dataset_update_rechecks_complete_package_before_managing_doi(self):
+        plugin = doi_plugin.DOIPlugin()
+        hook_package = {
+            "id": "pkg-1",
+            "state": "active",
+            "private": False,
+        }
+        complete_package = {
+            **hook_package,
+            "identifier_source": "external",
+            "identifier_url": "https://doi.org/10.1234/external",
+        }
+
+        with patch(
+            "ckanext.doi.plugin._should_manage_doi",
+            side_effect=[True, False],
+        ) as should_manage, patch(
+            "ckanext.doi.plugin._package_show_dict",
+            return_value=complete_package,
+        ) as package_show, patch(
+            "ckanext.doi.plugin.DOIQuery.read_package"
+        ) as read_package, patch(
+            "ckanext.doi.plugin.get_client"
+        ) as get_client:
+            result = plugin.after_dataset_update({}, hook_package)
+
+        assert result is hook_package
+        assert should_manage.call_args_list == [
+            call(hook_package),
+            call(complete_package),
+        ]
+        package_show.assert_called_once_with({}, "pkg-1")
+        read_package.assert_not_called()
+        get_client.assert_not_called()
+
     def test_after_dataset_show_skip_does_not_override_package_doi(self):
-        with patch("ckanext.doi.plugin._should_manage_doi", return_value=False):
-            dataset = factories.Dataset(doi="10.1234/external")
-            package = call_action("package_show", id=dataset["id"])
+        plugin = doi_plugin.DOIPlugin()
+        package = {"id": "pkg-1", "doi": "10.1234/external"}
+
+        with patch(
+            "ckanext.doi.plugin._should_manage_doi", return_value=False
+        ), patch("ckanext.doi.plugin.DOIQuery.read_package") as read_package:
+            plugin.after_dataset_show({}, package)
 
         assert package["doi"] == "10.1234/external"
         assert "doi_status" not in package
+        read_package.assert_not_called()
 
     @pytest.mark.ckan_config("ckanext.doi.publisher", "argh!")
     def test_after_dataset_update(self):

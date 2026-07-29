@@ -155,12 +155,20 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
             package_id = pkg_dict['id']
 
             try:
-                # remove user-defined update schemas first (if needed)
-                context.pop('schema', None)
+                # Recheck the complete package because the hook payload may not
+                # contain the fields an IDoi implementation uses to opt out.
+                pkg_show_dict = _package_show_dict(context, package_id)
+                if not _should_manage_doi(pkg_show_dict):
+                    log.debug(
+                        'ckanext-doi after_dataset_update skipped from '
+                        'package_show pkg=%s',
+                        _pkg_log_summary(pkg_show_dict),
+                    )
+                    return pkg_dict
 
-                # Load the package_show version of the dict
-                pkg_show_dict = toolkit.get_action('package_show')(
-                    context, {'id': package_id}
+                log.debug(
+                    'ckanext-doi after_dataset_update managing DOI pkg=%s',
+                    _pkg_log_summary(pkg_show_dict),
                 )
 
                 # Load or create the local DOI (package may not have a DOI if extension was loaded
