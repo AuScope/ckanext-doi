@@ -7,9 +7,16 @@
 from datetime import datetime
 from logging import getLogger
 
-from ckan.plugins import SingletonPlugin, implements, interfaces, toolkit
+from ckan.plugins import (
+    PluginImplementations,
+    SingletonPlugin,
+    implements,
+    interfaces,
+    toolkit,
+)
 
 from ckanext.doi import cli
+from ckanext.doi.interfaces import IDoi
 from ckanext.doi.lib.api import get_client
 from ckanext.doi.lib.helpers import (
     get_site_title,
@@ -22,6 +29,50 @@ from ckanext.doi.lib.metadata import build_metadata_dict, build_xml_dict
 from ckanext.doi.model.crud import DOIQuery
 
 log = getLogger(__name__)
+
+
+def _pkg_log_summary(pkg_dict):
+    pkg_dict = pkg_dict or {}
+    return {
+        'id': pkg_dict.get('id'),
+        'name': pkg_dict.get('name'),
+        'type': pkg_dict.get('type'),
+        'identifier_source': pkg_dict.get('identifier_source'),
+        'identifier_url': pkg_dict.get('identifier_url'),
+        'doi_source': pkg_dict.get('doi_source'),
+        'doi': pkg_dict.get('doi'),
+    }
+
+
+def _should_manage_doi(pkg_dict):
+    """Return False when any IDoi implementation opts this package out."""
+    implementations = list(PluginImplementations(IDoi))
+    log.debug(
+        'ckanext-doi _should_manage_doi pkg=%s implementations=%s',
+        _pkg_log_summary(pkg_dict),
+        [plugin.__class__.__name__ for plugin in implementations],
+    )
+    for plugin in implementations:
+        should_manage_doi = getattr(plugin, 'should_manage_doi', None)
+        if should_manage_doi is None:
+            continue
+        should_manage = should_manage_doi(pkg_dict)
+        log.debug(
+            'ckanext-doi _should_manage_doi plugin=%s result=%s pkg=%s',
+            plugin.__class__.__name__,
+            should_manage,
+            _pkg_log_summary(pkg_dict),
+        )
+        if not should_manage:
+            return False
+    return True
+
+
+def _package_show_dict(context, package_id):
+    show_context = dict(context)
+    show_context['ignore_auth'] = True
+    show_context.pop('schema', None)
+    return toolkit.get_action('package_show')(show_context, {'id': package_id})
 
 
 class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
@@ -53,6 +104,33 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         NB: This is called after creation of a dataset, before resources have been
         added, so state = draft.
         """
+        if not _should_manage_doi(pkg_dict):
+            log.debug(
+                'ckanext-doi after_dataset_create skipped from hook pkg=%s',
+                _pkg_log_summary(pkg_dict),
+            )
+            return
+
+        try:
+            pkg_show_dict = _package_show_dict(context, pkg_dict['id'])
+        except Exception:
+            log.exception(
+                'ckanext-doi after_dataset_create could not load package_show '
+                'for skip policy; falling back to hook pkg=%s',
+                _pkg_log_summary(pkg_dict),
+            )
+        else:
+            if not _should_manage_doi(pkg_show_dict):
+                log.debug(
+                    'ckanext-doi after_dataset_create skipped from package_show pkg=%s',
+                    _pkg_log_summary(pkg_show_dict),
+                )
+                return
+
+        log.debug(
+            'ckanext-doi after_dataset_create managing DOI pkg=%s',
+            _pkg_log_summary(pkg_dict),
+        )
         DOIQuery.read_package(pkg_dict['id'], create_if_none=True)
 
     ## IPackageController
@@ -63,6 +141,13 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         Check status of the dataset to determine if we should publish DOI to datacite
         network.
         """
+        if not _should_manage_doi(pkg_dict):
+            log.debug(
+                'ckanext-doi after_dataset_update skipped from hook pkg=%s',
+                _pkg_log_summary(pkg_dict),
+            )
+            return pkg_dict
+
         # Is this active and public? If so we need to make sure we have an active DOI
         if pkg_dict.get('state', 'active') == 'active' and not pkg_dict.get(
             'private', False
@@ -125,6 +210,17 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         """
         Add the DOI details to the pkg_dict so it can be displayed.
         """
+        if not _should_manage_doi(pkg_dict):
+            log.debug(
+                'ckanext-doi after_dataset_show skipped pkg=%s',
+                _pkg_log_summary(pkg_dict),
+            )
+            return
+
+        log.debug(
+            'ckanext-doi after_dataset_show managing DOI pkg=%s',
+            _pkg_log_summary(pkg_dict),
+        )
         doi = DOIQuery.read_package(pkg_dict['id'])
         if doi:
             pkg_dict['doi'] = doi.identifier
