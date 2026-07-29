@@ -121,10 +121,10 @@ class TestFakeDataciteClient:
         package_id = 'test-package-456'
         
         with patch('ckan.plugins.toolkit.config.get') as mock_config:
-            mock_config.side_effect = lambda key: {
+            mock_config.side_effect = lambda key, default=None: {
                 'ckanext.doi.prefix': '10.5555',
                 'ckan.site_url': 'http://localhost:5000/',
-            }.get(key)
+            }.get(key, default)
             
             with patch('ckanext.doi.model.crud.DOIQuery.read_doi', return_value=None):
                 with patch('ckanext.doi.model.crud.DOIQuery.read_package', return_value=None):

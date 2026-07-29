@@ -4,6 +4,8 @@
 # This file is part of ckanext-doi
 # Created by the Natural History Museum in London, UK
 
+import json
+
 import pytest
 
 from ckanext.doi.lib import datacite_compat
@@ -654,7 +656,7 @@ def test_pidinst_multiple_funders():
         {
             'funder_name': 'European Research Council',
             'funder_identifier': '10.13039/501100000781',
-            'funder_identifier_type': 'CrossrefFunderID',
+            'funder_identifier_type': 'Crossref Funder ID',
             'award_number': 'ERC-2024-67890',
             'award_title': 'Advanced Seismology Research'
         }
@@ -677,7 +679,7 @@ def test_pidinst_multiple_funders():
     funding_ref_2 = metadata_dict['fundingReferences'][1]
     assert funding_ref_2['funderName'] == 'European Research Council'
     assert funding_ref_2['funderIdentifier'] == '10.13039/501100000781'
-    assert funding_ref_2['funderIdentifierType'] == 'CrossrefFunderID'
+    assert funding_ref_2['funderIdentifierType'] == 'Crossref Funder ID'
     assert funding_ref_2['awardNumber'] == 'ERC-2024-67890'
     assert funding_ref_2['awardTitle'] == 'Advanced Seismology Research'
 
@@ -727,7 +729,7 @@ def test_pidinst_funding_partial_fields():
     funding_ref = metadata_dict['fundingReferences'][0]
     assert funding_ref['funderName'] == 'Research Foundation'
     assert funding_ref['funderIdentifier'] == 'https://example.com/funder'
-    assert funding_ref['funderIdentifierType'] == 'URL'
+    assert funding_ref['funderIdentifierType'] == 'Other'
     # These should not be presentschemaURI
     assert 'awardNumber' not in funding_ref
     assert 'awardUri' not in funding_ref
@@ -736,7 +738,7 @@ def test_pidinst_funding_partial_fields():
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
 def test_pidinst_funding_identifier_types():
-    """Test various funder identifier types (ROR, CrossrefFunderID, GRID, ISNI, Other)"""
+    """Test DataCite funder types, including legacy Crossref spelling."""
     pkg_with_funding = dict(PIDINST_INSTRUMENT_PKG)
     pkg_with_funding['funder'] = [
         {'funder_name': 'Funder 1', 'funder_identifier': 'https://ror.org/123', 'funder_identifier_type': 'ROR'},
@@ -752,10 +754,166 @@ def test_pidinst_funding_identifier_types():
     assert len(metadata_dict['fundingReferences']) == 5
     
     assert metadata_dict['fundingReferences'][0]['funderIdentifierType'] == 'ROR'
-    assert metadata_dict['fundingReferences'][1]['funderIdentifierType'] == 'CrossrefFunderID'
+    assert (
+        metadata_dict['fundingReferences'][1]['funderIdentifierType']
+        == 'Crossref Funder ID'
+    )
     assert metadata_dict['fundingReferences'][2]['funderIdentifierType'] == 'GRID'
     assert metadata_dict['fundingReferences'][3]['funderIdentifierType'] == 'ISNI'
     assert metadata_dict['fundingReferences'][4]['funderIdentifierType'] == 'Other'
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+@pytest.mark.parametrize(
+    ('identifier_type', 'identifier', 'expected'),
+    [
+        ('ror', 'https://ror.org/123', 'ROR'),
+        ('grid', 'grid.123.4', 'GRID'),
+        ('isni', '0000 0001 2345 6789', 'ISNI'),
+        (
+            'Crossref Funder ID',
+            '10.13039/501100000781',
+            'Crossref Funder ID',
+        ),
+        (
+            'CrossrefFunderID',
+            '10.13039/501100000781',
+            'Crossref Funder ID',
+        ),
+        ('DOI', '10.13039/501100000781', 'Crossref Funder ID'),
+        ('DOI', '10.1234/example', 'Other'),
+        ('URL', 'https://example.com/funder', 'Other'),
+        ('local', 'local-funder-id', 'Other'),
+        ('unrecognised', 'custom-funder-id', 'Other'),
+    ],
+)
+def test_pidinst_funder_identifier_type_mapping(
+    identifier_type, identifier, expected
+):
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['funder'] = [
+        {
+            'funder_name': 'Test Funder',
+            'funder_identifier': identifier,
+            'funder_identifier_type': identifier_type,
+        }
+    ]
+
+    funding_ref = build_metadata_dict(pkg)['fundingReferences'][0]
+
+    assert funding_ref['funderIdentifier'] == identifier
+    assert funding_ref['funderIdentifierType'] == expected
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_pidinst_funder_omits_identifier_type_without_identifier():
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['funder'] = [
+        {
+            'funder_name': 'Test Funder',
+            'funder_identifier': None,
+            'funder_identifier_type': 'ROR',
+        }
+    ]
+
+    funding_ref = build_metadata_dict(pkg)['fundingReferences'][0]
+
+    assert 'funderIdentifier' not in funding_ref
+    assert 'funderIdentifierType' not in funding_ref
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_json_composite_nulls_build_and_validate():
+    """JSON nulls survive the full metadata-to-DataCite validation chain."""
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['funder'] = json.dumps([
+        {
+            'funder_name': 'Geological Survey of Western Australia',
+            'funder_identifier': 'https://example.com/funders/gssa',
+            'funder_identifier_type': 'URL',
+            'award_number': None,
+            'award_uri': None,
+            'award_title': None,
+        }
+    ])
+    pkg['alternate_identifier_obj'] = json.dumps([
+        {
+            'alternate_identifier': 'SN-2024-0123',
+            'alternate_identifier_type': 'SerialNumber',
+            'alternate_identifier_name': None,
+        },
+        {
+            'alternate_identifier': 'INV-9876',
+            'alternate_identifier_type': 'InventoryNumber',
+            'alternate_identifier_name': None,
+        },
+    ])
+    pkg['related_identifier_obj'] = json.dumps([
+        {
+            'related_identifier': 'https://example.com/instrument/manual',
+            'related_identifier_type': None,
+            'relation_type': None,
+            'relation_type_information': None,
+        }
+    ])
+
+    metadata_dict = build_metadata_dict(pkg)
+    alternate_identifiers = metadata_dict['alternateIdentifiers']
+    funding_ref = metadata_dict['fundingReferences'][0]
+    related_identifier = metadata_dict['relatedIdentifiers'][0]
+
+    assert any(
+        identifier['alternateIdentifier'] == 'SN-2024-0123'
+        and identifier['alternateIdentifierType'] == 'SerialNumber'
+        for identifier in alternate_identifiers
+    )
+    assert any(
+        identifier['alternateIdentifier'] == 'INV-9876'
+        and identifier['alternateIdentifierType'] == 'InventoryNumber'
+        for identifier in alternate_identifiers
+    )
+    assert funding_ref['funderIdentifier'] == 'https://example.com/funders/gssa'
+    assert funding_ref['funderIdentifierType'] == 'Other'
+    assert 'awardNumber' not in funding_ref
+    assert related_identifier['relatedIdentifierType'] == 'URL'
+    assert related_identifier['relationType'] == 'References'
+
+    xml_dict = build_xml_dict(metadata_dict)
+    xml_dict['doi'] = '10.5072/json-null-regression'
+    datacite_compat.validator.validate(xml_dict)
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_permalink_survives_malformed_alternate_identifier_json():
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['alternate_identifier_obj'] = (
+        '[{"alternate_identifier": "SN-broken", "unused": null'
+    )
+
+    metadata_dict = build_metadata_dict(pkg)
+
+    assert len(metadata_dict['alternateIdentifiers']) == 1
+    assert metadata_dict['alternateIdentifiers'][0]['alternateIdentifierType'] == 'URL'
+    assert metadata_dict['alternateIdentifiers'][0]['alternateIdentifier']
+
+
+@pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')
+def test_legacy_python_repr_composite_still_parses():
+    pkg = dict(PIDINST_INSTRUMENT_PKG)
+    pkg['alternate_identifier_obj'] = str([
+        {
+            'alternate_identifier': 'LEGACY-SERIAL',
+            'alternate_identifier_type': 'SerialNumber',
+            'alternate_identifier_name': None,
+        }
+    ])
+
+    metadata_dict = build_metadata_dict(pkg)
+
+    assert any(
+        identifier['alternateIdentifier'] == 'LEGACY-SERIAL'
+        for identifier in metadata_dict['alternateIdentifiers']
+    )
 
 
 @pytest.mark.ckan_config('ckanext.doi.publisher', 'Test Publisher')

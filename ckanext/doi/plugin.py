@@ -69,39 +69,54 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         ):
             package_id = pkg_dict['id']
 
-            # remove user-defined update schemas first (if needed)
-            context.pop('schema', None)
+            try:
+                # remove user-defined update schemas first (if needed)
+                context.pop('schema', None)
 
-            # Load the package_show version of the dict
-            pkg_show_dict = toolkit.get_action('package_show')(
-                context, {'id': package_id}
-            )
+                # Load the package_show version of the dict
+                pkg_show_dict = toolkit.get_action('package_show')(
+                    context, {'id': package_id}
+                )
 
-            # Load or create the local DOI (package may not have a DOI if extension was loaded
-            # after package creation)
-            doi = DOIQuery.read_package(package_id, create_if_none=True)
+                # Load or create the local DOI (package may not have a DOI if extension was loaded
+                # after package creation)
+                doi = DOIQuery.read_package(package_id, create_if_none=True)
 
-            metadata_dict = build_metadata_dict(pkg_show_dict)
-            xml_dict = build_xml_dict(metadata_dict)
+                metadata_dict = build_metadata_dict(pkg_show_dict)
+                xml_dict = build_xml_dict(metadata_dict)
 
-            client = get_client()
+                client = get_client()
 
-            if doi.published is None:
-                # Set issued date in DOI metadata knowing that it will be minted immediately
-                for d in xml_dict['dates']:
-                    if d['dateType'] == 'Issued':
-                        d['date'] = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S.%f')
-                        break
-                # Metadata gets created before minting
-                client.set_metadata(doi.identifier, xml_dict)
-                client.mint_doi(doi.identifier, package_id)
-                toolkit.h.flash_success('DataCite DOI created')
-            else:
-                same = client.check_for_update(doi.identifier, xml_dict)
-                if not same:
-                    # Not the same, so we want to update the metadata
+                if doi.published is None:
+                    # Set issued date in DOI metadata knowing that it will be minted immediately
+                    for d in xml_dict['dates']:
+                        if d['dateType'] == 'Issued':
+                            d['date'] = datetime.strftime(
+                                datetime.now(), '%Y-%m-%d %H:%M:%S.%f'
+                            )
+                            break
+                    # Metadata must validate and be created before minting. If it
+                    # fails, the exception is caught below and mint_doi is not called.
                     client.set_metadata(doi.identifier, xml_dict)
-                    toolkit.h.flash_success('DataCite DOI metadata updated')
+                    client.mint_doi(doi.identifier, package_id)
+                    toolkit.h.flash_success('DataCite DOI created')
+                else:
+                    same = client.check_for_update(doi.identifier, xml_dict)
+                    if not same:
+                        # Not the same, so we want to update the metadata
+                        client.set_metadata(doi.identifier, xml_dict)
+                        toolkit.h.flash_success('DataCite DOI metadata updated')
+            except Exception as e:
+                log.error(
+                    'DataCite DOI processing failed for package %s: %s',
+                    package_id,
+                    e,
+                    exc_info=True,
+                )
+                toolkit.h.flash_error(
+                    'The dataset was saved, but its DataCite DOI metadata could '
+                    f'not be published: {e}. Correct the metadata and save again.'
+                )
 
         return pkg_dict
 

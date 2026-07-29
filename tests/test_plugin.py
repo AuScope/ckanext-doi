@@ -60,6 +60,35 @@ class TestDOIPlugin:
                 assert mock_client.doi_post.called
 
     @pytest.mark.ckan_config("ckanext.doi.publisher", "argh!")
+    def test_datacite_failure_does_not_abort_save_or_mint(self):
+        with patch("ckan.plugins.toolkit.h.flash_success"), patch(
+            "ckan.plugins.toolkit.h.flash_error"
+        ) as flash_error, patch(
+            "ckanext.doi.lib.api.DataCiteMDSClient"
+        ) as mock_client_class:
+            mock_client = MagicMock(
+                metadata_get=MagicMock(side_effect=DataCiteNotFoundError())
+            )
+            mock_client_class.return_value = mock_client
+
+            dataset = factories.Dataset(title="test", author="Author, Test")
+            mock_client.reset_mock()
+            mock_client.metadata_post.side_effect = RuntimeError(
+                "metadata validation failed"
+            )
+
+            updated = call_action(
+                "package_patch", id=dataset["id"], title="saved despite DOI error"
+            )
+
+        assert updated["title"] == "saved despite DOI error"
+        assert mock_client.metadata_post.called
+        assert not mock_client.doi_post.called
+        flash_error.assert_called_once()
+        assert "dataset was saved" in flash_error.call_args.args[0]
+        assert DOIQuery.read_package(dataset["id"]).published is None
+
+    @pytest.mark.ckan_config("ckanext.doi.publisher", "argh!")
     @pytest.mark.ckan_config("ckanext.doi.site_url", "http://dois.are.great.org")
     def test_after_dataset_show(self):
         # as well as testing the after_dataset_show functionality works on some level,

@@ -2,6 +2,27 @@
 
 ## v4.0.0 (UNRELEASED)
 
+### Fixes
+
+- Parse composite CKAN fields as JSON, including `null`, `true`, and `false`,
+  while retaining support for legacy Python-repr values.
+- Prevent null composite values from being emitted into DataCite string fields,
+  and preserve the package permalink when alternate identifiers are malformed.
+- Map PIDINST funder identifier types to the constrained DataCite
+  `funderIdentifierType` values without changing owner or manufacturer schemes.
+- Keep CKAN package saves successful when DataCite validation or API calls fail,
+  log the full error, and avoid minting a DOI until its metadata is accepted.
+- Log optional metadata extraction failures at warning level.
+
+### Repair tooling
+
+- Add `--mint-unpublished` to `doi update-doi` so locally allocated but
+  unregistered DOIs can be repaired.
+- Add `--dry-run` metadata validation and change reporting without DataCite
+  POSTs or DOI minting.
+- Continue bulk repairs after individual record failures and print updated,
+  skipped, and failed totals.
+
 ### Breaking Changes
 
 - **MAJOR**: Upgraded from DataCite Metadata Schema v4.3 to v4.5
