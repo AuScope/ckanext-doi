@@ -1,4 +1,5 @@
 import click
+import logging
 from ckan import model
 from ckan.model import Session
 from ckan.plugins import toolkit
@@ -10,8 +11,11 @@ from ckanext.doi.model import doi as doi_model
 from ckanext.doi.model.crud import DOIQuery
 from ckanext.doi.model.doi import DOI
 
+log = logging.getLogger(__name__)
+
 
 def get_commands():
+    log.info("get_commands()")
     return [doi]
 
 
@@ -22,6 +26,7 @@ def doi():
 
 @doi.command(name='initdb')
 def init_db():
+    log.info("init_db()")
     if not model.package_table.exists():
         click.secho(
             'Package table must exist before initialising the DOI table', fg='red'
@@ -40,6 +45,7 @@ def delete_dois():
     """
     Delete all DOIs from the database.
     """
+    log.info("delete_dois()")
     to_delete = Session.query(DOI).filter(
         DOI.identifier.like(f'%{DataciteClient.get_prefix()}%')
     )
@@ -61,6 +67,7 @@ def update_doi(package_ids):
     """
     Update either all DOIs in the system or the ones associated with the given packages.
     """
+    log.info(f"update_doi(package_ids={package_ids})")
     if not package_ids:
         dois_to_update = Session.query(DOI).all()
     else:

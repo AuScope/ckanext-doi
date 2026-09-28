@@ -6,7 +6,11 @@
 
 from ckan.model import Session
 
+import logging
+
 from ckanext.doi.model.doi import DOI, doi_table
+
+log = logging.getLogger(__name__)
 
 
 class DOIQuery:
@@ -24,6 +28,7 @@ class DOIQuery:
         :param published: when this DOI was published (datetime, nullable)
         :return: the newly created record object
         """
+        log.info(f"DOIQuery.create(identifier={identifier}, package_id={package_id})")
         new_record = DOI(
             identifier=identifier, package_id=package_id, published=published
         )
@@ -39,6 +44,7 @@ class DOIQuery:
         :param identifier: the DOI string
         :return: the record object
         """
+        log.info(f"DOIQuery.read_doi(identifier={identifier})")
         return Session.query(DOI).get(identifier)
 
     @classmethod
@@ -53,8 +59,10 @@ class DOIQuery:
         """
         from ckanext.doi.lib.api import DataciteClient
 
+        log.info(f"DOIQuery.read_package(package_id={package_id}, create_if_none={create_if_none})")
         record = Session.query(DOI).filter(DOI.package_id == package_id).first()
         if record is None and create_if_none:
+            log.info(f"No DOI record for package {package_id}; generating a new one")
             client = DataciteClient()
             new_doi = client.generate_doi()
             record = cls.create(new_doi, package_id)
@@ -69,6 +77,7 @@ class DOIQuery:
         :param kwargs: the values to be updated
         :return: the updated record object
         """
+        log.info(f"DOIQuery.update_doi(identifier={identifier}, kwargs={kwargs})")
         update_dict = {k: v for k, v in kwargs.items() if k in cls.cols}
         Session.query(DOI).filter(DOI.identifier == identifier).update(update_dict)
         Session.commit()
@@ -84,6 +93,7 @@ class DOIQuery:
         :param kwargs: the values to be updated
         :return: the updated record object
         """
+        log.info(f"DOIQuery.update_package(package_id={package_id}, kwargs={kwargs})")
         update_dict = {k: v for k, v in kwargs.items() if k in cls.cols}
         Session.query(DOI).filter(DOI.package_id == package_id).update(update_dict)
         Session.commit()
@@ -97,6 +107,7 @@ class DOIQuery:
         :param identifier: the DOI string
         :return: True if a record was deleted, False if not
         """
+        log.info(f"DOIQuery.delete_doi(identifier={identifier})")
         to_delete = cls.read_doi(identifier)
         if to_delete is not None:
             Session.delete(to_delete)
@@ -113,6 +124,7 @@ class DOIQuery:
         :param package_id: the id of the package
         :return: True if a record was deleted, False if not
         """
+        log.info(f"DOIQuery.delete_package(package_id={package_id})")
         to_delete = cls.read_package(package_id)
         if to_delete is not None:
             Session.delete(to_delete)

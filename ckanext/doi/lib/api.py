@@ -27,6 +27,7 @@ class DataciteClient:
     test_url = 'https://mds.test.datacite.org'
 
     def __init__(self):
+        log.info("DataciteClient.__init__()")
         self.username = toolkit.config.get('ckanext.doi.account_name')
         self.password = toolkit.config.get('ckanext.doi.account_password')
         self._test_mode = None
@@ -40,6 +41,10 @@ class DataciteClient:
         if self.test_mode:
             # temporary fix because datacite 1.0.1 isn't updated for the test prefix deprecation
             client_config['url'] = self.test_url
+        log.info(f"{client_config['username']=}")
+        log.info(f"{client_config['prefix']=}")
+        log.info(f"{client_config['test_mode']=}")
+        log.info(f"{client_config.get('url','Not set')=}")
         self.client = DataCiteMDSClient(**client_config)
 
     @property
@@ -80,6 +85,7 @@ class DataciteClient:
         avoid double use as this function uses no locking.
         :return: the full, unique DOI
         """
+        log.info("generate_doi()")
         # the list of valid characters is larger than just lowercase and the digits but we don't
         # need that many options and URLs with just alphanumeric characters in them are nicer. We
         # just use lowercase characters to avoid any issues with case being ignored
@@ -92,18 +98,30 @@ class DataciteClient:
             identifier = ''.join(random.choice(valid_characters) for _ in range(8))
             # form the doi using the prefix
             doi = f'{self.prefix}/{identifier}'
+            log.info(f"generate_doi: attempt {6 - attempts}/5, trying candidate DOI {doi}")
 
             if DOIQuery.read_doi(doi) is None:
                 try:
                     self.client.metadata_get(doi)
+                    log.info(f"generate_doi: candidate {doi} already exists on DataCite; retrying")
                 except DataCiteNotFoundError:
+                    log.info(f"DOI reserved: {doi}")
                     return doi
                 except DataCiteError as e:
                     log.warning(
                         f'Error whilst checking new DOIs with DataCite. DOI: {doi}, '
                         f'error: {e}'
                     )
+                except Exception as e:
+                    log.exception(
+                        f"generate_doi: unexpected error checking DOI {doi} with DataCite "
+                        f"(possible auth/connection issue): {e}"
+                    )
+                    raise
+            else:
+                log.info(f"generate_doi: candidate {doi} already in local DB; retrying")
             attempts -= 1
+        log.error("generate_doi: exhausted all 5 attempts without reserving a DOI")
         raise Exception('Failed to generate a DOI')
 
     def mint_doi(self, doi, package_id):
@@ -113,20 +131,28 @@ class DataciteClient:
         :param doi: the doi (full, prefix and suffix)
         :param package_id: the id of the package this doi is for
         """
+        log.info(f"mint_doi(doi={doi}, package_id={package_id})")
 
         # create the URL the DOI will point to, i.e. the package page
         site = toolkit.config.get('ckan.site_url')
         if site[-1] != '/':
             site += '/'
         permalink = f'{site}dataset/{package_id}'
+        log.info(f"mint_doi: posting DOI {doi} -> {permalink} to DataCite")
         # mint the DOI
-        self.client.doi_post(doi, permalink)
+        try:
+            self.client.doi_post(doi, permalink)
+        except Exception as e:
+            log.exception(f"mint_doi: doi_post to DataCite FAILED for DOI {doi}: {e}")
+            raise
+        log.info(f"mint_doi: DataCite doi_post succeeded for DOI {doi}; updating local DB")
         if DOIQuery.read_doi(doi) is None and DOIQuery.read_package(package_id) is None:
             DOIQuery.create(doi, package_id)
         elif DOIQuery.read_doi(doi) is None:
             # in case this was previously attempted but no DOI was added
             DOIQuery.update_package(package_id, identifier=doi)
         DOIQuery.update_doi(doi, published=dt.now())
+        log.info(f"mint_doi: DOI {doi} minted and recorded as published")
 
     def set_metadata(self, doi, xml_dict):
         """
@@ -136,14 +162,27 @@ class DataciteClient:
         :param xml_dict: the metadata as an xml dict (generated from build_xml_dict)
         :return:
         """
+        log.info(f"set_metadata(doi={doi})")
         xml_dict['identifiers'] = [{'identifierType': 'DOI', 'identifier': doi}]
 
         # check that the data is valid, this will raise a JSON schema exception if there are issues
-        schema43.validator.validate(xml_dict)
+        log.info(f"set_metadata: validating metadata for DOI {doi}")
+        try:
+            schema43.validator.validate(xml_dict)
+        except Exception as e:
+            log.exception(f"set_metadata: schema validation FAILED for DOI {doi}: {e}")
+            log.info(f"set_metadata: offending xml_dict = {xml_dict}")
+            raise
 
         xml_doc = schema43.tostring(xml_dict)
+        log.info(f"set_metadata: validation OK, posting metadata to DataCite for DOI {doi}")
         # create the metadata on datacite
-        self.client.metadata_post(xml_doc)
+        try:
+            self.client.metadata_post(xml_doc)
+        except Exception as e:
+            log.exception(f"set_metadata: metadata_post to DataCite FAILED for DOI {doi}: {e}")
+            raise
+        log.info(f"set_metadata: metadata posted successfully for DOI {doi}")
 
     def get_metadata(self, doi):
         """
@@ -152,9 +191,11 @@ class DataciteClient:
         :param doi: the DOI for which to retrieve the stored metadata
         :return:
         """
+        log.info(f"get_metadata(doi={doi})")
         try:
             metadata = self.client.metadata_get(doi)
         except DataCiteNotFoundError:
+            log.info(f"No metadata found on DataCite for DOI: {doi}")
             metadata = None
         return metadata
 
@@ -166,8 +207,10 @@ class DataciteClient:
         :param xml_dict: the xml_dict generated by build_xml_dict
         :return: True if the two are the same, False if not
         """
+        log.info(f"check_for_update(doi={doi})")
         posted_xml = self.get_metadata(doi)
         if posted_xml is None or posted_xml.strip() == '':
+            log.info(f"No existing metadata posted for DOI {doi}; update required")
             return False
         posted_xml_dict = dict(xmltodict.parse(posted_xml).get('resource', {}))
         new_xml_dict = dict(xmltodict.parse(schema43.tostring(xml_dict))['resource'])
@@ -183,7 +226,10 @@ class DataciteClient:
             new_xml_dict['dates']['date'] = [
                 d for d in new_xml_dict['dates']['date'] if d['@dateType'] != 'Updated'
             ]
-            return posted_xml_dict == new_xml_dict
+            is_same = posted_xml_dict == new_xml_dict
+            log.info(f"check_for_update(doi={doi}) result: same={is_same}")
+            return is_same
         else:
             # if the original doesn't have any dates, it's definitely different
+            log.info(f"check_for_update(doi={doi}): no dates in posted metadata; update required")
             return False

@@ -35,6 +35,7 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
 
     ## IClick
     def get_commands(self):
+        log.info("DOIPlugin.get_commands()")
         return cli.get_commands()
 
     ## IConfigurer
@@ -42,6 +43,7 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         """
         Adds templates.
         """
+        log.info("DOIPlugin.update_config()")
         toolkit.add_template_directory(config, 'theme/templates')
 
     ## IPackageController
@@ -52,6 +54,7 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         NB: This is called after creation of a dataset, before resources have been
         added, so state = draft.
         """
+        log.info(f"DOIPlugin.after_dataset_create(pkg_id={pkg_dict.get('id')})")
         DOIQuery.read_package(pkg_dict['id'], create_if_none=True)
 
     ## IPackageController
@@ -62,12 +65,13 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         Check status of the dataset to determine if we should publish DOI to datacite
         network.
         """
+        log.info(f"DOIPlugin.after_dataset_update(pkg_id={pkg_dict.get('id')})")
         # Is this active and public? If so we need to make sure we have an active DOI
         if pkg_dict.get('state', 'active') == 'active' and not pkg_dict.get(
             'private', False
         ):
             package_id = pkg_dict['id']
-
+            log.info(f"Dataset {package_id} is active and public; processing DOI")
             # remove user-defined update schemas first (if needed)
             context.pop('schema', None)
 
@@ -86,21 +90,33 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
             client = DataciteClient()
 
             if doi.published is None:
+                log.info(f"DOI {doi.identifier} not yet published; minting new DOI")
                 # Set issued date in DOI metadata knowing that it will be minted immediately
                 for d in xml_dict['dates']:
                     if d['dateType'] == 'Issued':
                         d['date'] = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S.%f')
                         break
                 # Metadata gets created before minting
-                client.set_metadata(doi.identifier, xml_dict)
-                client.mint_doi(doi.identifier, package_id)
+                try:
+                    client.set_metadata(doi.identifier, xml_dict)
+                    client.mint_doi(doi.identifier, package_id)
+                except Exception as e:
+                    log.exception(
+                        f"after_dataset_update: FAILED to create DOI {doi.identifier} "
+                        f"for package {package_id}: {e}"
+                    )
+                    raise
+                log.info(f"DOI {doi.identifier} minted for package {package_id}")
                 toolkit.h.flash_success('DataCite DOI created')
             else:
                 same = client.check_for_update(doi.identifier, xml_dict)
                 if not same:
                     # Not the same, so we want to update the metadata
+                    log.info(f"DOI {doi.identifier} metadata changed; updating")
                     client.set_metadata(doi.identifier, xml_dict)
                     toolkit.h.flash_success('DataCite DOI metadata updated')
+                else:
+                    log.info(f"DOI {doi.identifier} metadata unchanged; no update needed")
 
         return pkg_dict
 
@@ -109,6 +125,7 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         """
         Add the DOI details to the pkg_dict so it can be displayed.
         """
+        log.info(f"DOIPlugin.after_dataset_show(pkg_id={pkg_dict.get('id')})")
         doi = DOIQuery.read_package(pkg_dict['id'])
         if doi:
             pkg_dict['doi'] = doi.identifier
@@ -123,22 +140,26 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
         """
         CKAN 2.9 compat version of after_dataset_create.
         """
+        log.info("DOIPlugin.after_create()")
         return self.after_dataset_create(*args, **kwargs)
 
     def after_update(self, *args, **kwargs):
         """
         CKAN 2.9 compat version of after_dataset_update.
         """
+        log.info("DOIPlugin.after_update()")
         return self.after_dataset_update(*args, **kwargs)
 
     def after_show(self, *args, **kwargs):
         """
         CKAN 2.9 compat version of after_dataset_show.
         """
+        log.info("DOIPlugin.after_show()")
         return self.after_dataset_show(*args, **kwargs)
 
     # ITemplateHelpers
     def get_helpers(self):
+        log.info("DOIPlugin.get_helpers()")
         return {
             'package_get_year': package_get_year,
             'now': datetime.now,

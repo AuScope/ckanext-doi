@@ -6,9 +6,13 @@
 
 from datetime import datetime
 
+import logging
+
 import dateutil.parser as parser
 from ckan.plugins import toolkit
 from ckantools.config import get_debug, get_setting
+
+log = logging.getLogger(__name__)
 
 
 def package_get_year(pkg_dict):
@@ -17,6 +21,7 @@ def package_get_year(pkg_dict):
 
     :param pkg_dict: return:
     """
+    log.info("package_get_year()")
     if not isinstance(pkg_dict['metadata_created'], datetime):
         pkg_dict['metadata_created'] = parser.parse(pkg_dict['metadata_created'])
 
@@ -29,6 +34,7 @@ def get_site_title():
 
     :returns: str site title
     """
+    log.info("get_site_title()")
     return toolkit.config.get('ckanext.doi.site_title')
 
 
@@ -38,6 +44,7 @@ def get_site_url():
 
     Try and use ckanext.doi.site_url but if that's not set use ckan.site_url.
     """
+    log.info("get_site_url()")
     site_url = toolkit.config.get(
         'ckanext.doi.site_url', toolkit.config.get('ckan.site_url', '')
     )
@@ -51,6 +58,7 @@ def date_or_none(date_object_or_string):
     :param date_object_or_string: a datetime or date string
     :return: datetime or None
     """
+    log.info("date_or_none()")
     if isinstance(date_object_or_string, datetime):
         return date_object_or_string
     elif isinstance(date_object_or_string, str):
@@ -65,4 +73,5 @@ def doi_test_mode():
 
     :return: bool
     """
+    log.info("doi_test_mode()")
     return toolkit.asbool(get_setting('ckanext.doi.test_mode', default=get_debug()))

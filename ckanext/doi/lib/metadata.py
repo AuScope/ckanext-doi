@@ -25,6 +25,7 @@ def build_metadata_dict(pkg_dict):
 
     :param pkg_dict: dict of package details
     """
+    log.info(f"build_metadata_dict(pkg_id={pkg_dict.get('id')})")
     metadata_dict = {}
 
     # collect errors instead of throwing them immediately; some data may not be correctly handled
@@ -341,6 +342,7 @@ def build_metadata_dict(pkg_dict):
         for k, e in optional_errors.items():
             log.debug(f'{k}: {e}')
 
+    log.info(f"build_metadata_dict() completed with {len(metadata_dict)} keys")
     return metadata_dict
 
 
@@ -354,6 +356,7 @@ def build_xml_dict(metadata_dict):
     :param metadata_dict: a dict of metadata generated from build_metadata_dict
     :return: dict that can be passed directly to datacite.schema43.tostring()
     """
+    log.info("build_xml_dict()")
     if "igsn_theme" in toolkit.config.get('ckan.plugins'):
         # For Sample Repository resource type is "PhysicalObject"
         resource_type_general = "PhysicalObject"

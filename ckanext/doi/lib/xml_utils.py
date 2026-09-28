@@ -4,6 +4,10 @@
 # This file is part of ckanext-doi
 # Created by the Natural History Museum in London, UK
 
+import logging
+
+log = logging.getLogger(__name__)
+
 
 def create_contributor(
     full_name=None,
@@ -29,6 +33,7 @@ def create_contributor(
     :param identifiers: a list of dicts with "identifier", "scheme", and (optionally) "scheme_uri"
     :return: a dict
     """
+    log.info(f"create_contributor(full_name={full_name}, is_org={is_org})")
     if is_org and full_name is None:
         raise ValueError('Creator name must be supplied as full_name="Org Name"')
     if full_name is None and (family_name is None or given_name is None):
