@@ -141,7 +141,8 @@ class DataciteClient:
         log.info(f"mint_doi: posting DOI {doi} -> {permalink} to DataCite")
         # mint the DOI
         try:
-            self.client.doi_post(doi, permalink)
+            retval = self.client.doi_post(doi, permalink)
+            log.info(f"mint_doi: doi_post({doi}, {permalink}) returned {retval}")
         except Exception as e:
             log.exception(f"mint_doi: doi_post to DataCite FAILED for DOI {doi}: {e}")
             raise
@@ -176,9 +177,11 @@ class DataciteClient:
 
         xml_doc = schema43.tostring(xml_dict)
         log.info(f"set_metadata: validation OK, posting metadata to DataCite for DOI {doi}")
+        log.info(f"set_metadata: submitting {xml_doc=}")
         # create the metadata on datacite
         try:
-            self.client.metadata_post(xml_doc)
+            retval = self.client.metadata_post(xml_doc)
+            log.info(f"set_metadata: metadata_post returned {retval}")
         except Exception as e:
             log.exception(f"set_metadata: metadata_post to DataCite FAILED for DOI {doi}: {e}")
             raise
