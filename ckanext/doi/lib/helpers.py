@@ -82,7 +82,7 @@ def flash_success_safe(message, context=None):
     """
     context = context or {}
     if context.get('defer_flash') or context.get('no_flash'):
-        log.debug("flash_success_safe: caller opted out of flashing; skipping")
+        # log.debug("flash_success_safe: caller opted out of flashing; skipping")
         return
 
     # Robust fallback: only flash when there is an active request context.
@@ -92,9 +92,9 @@ def flash_success_safe(message, context=None):
         has_request_context = None
 
     if has_request_context is not None and not has_request_context():
-        log.debug(
-            "flash_success_safe: no active request context; skipping flash"
-        )
+        # log.debug(
+        #    "flash_success_safe: no active request context; skipping flash"
+        # )
         return
 
     toolkit.h.flash_success(message)
