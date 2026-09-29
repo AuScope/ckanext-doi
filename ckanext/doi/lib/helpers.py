@@ -67,6 +67,47 @@ def date_or_none(date_object_or_string):
         return None
 
 
+def flash_success_safe(message, context=None):
+    """
+    Flash a success message only when it is safe to do so.
+
+    ``toolkit.h.flash_success`` writes to the Flask session, which requires an
+    active HTTP request context. When ``after_dataset_update`` runs inside a
+    background job (e.g. an RQ worker), there is no request context and calling
+    ``flash_success`` raises ``RuntimeError: Working outside of request
+    context``.
+
+    This helper skips the flash when either:
+
+    * the caller explicitly opts out by setting a truthy ``context['defer_flash']``
+      or ``context['no_flash']`` (useful for background jobs that know they have
+      no request context), or
+    * there is no active Flask request context (a robust fallback so callers
+      that forget the flag still don't crash).
+
+    :param message: the message to flash on success
+    :param context: the CKAN action context dict (optional)
+    """
+    context = context or {}
+    if context.get('defer_flash') or context.get('no_flash'):
+        log.debug("flash_success_safe: caller opted out of flashing; skipping")
+        return
+
+    # Robust fallback: only flash when there is an active request context.
+    try:
+        from flask import has_request_context
+    except ImportError:
+        has_request_context = None
+
+    if has_request_context is not None and not has_request_context():
+        log.debug(
+            "flash_success_safe: no active request context; skipping flash"
+        )
+        return
+
+    toolkit.h.flash_success(message)
+
+
 def doi_test_mode():
     """
     Determines whether we're running in test mode.

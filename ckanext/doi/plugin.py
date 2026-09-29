@@ -16,6 +16,7 @@ from ckanext.doi.lib.helpers import (
     get_site_url,
     package_get_year,
     doi_test_mode,
+    flash_success_safe,
 )
 from ckanext.doi.lib.metadata import build_metadata_dict, build_xml_dict
 from ckanext.doi.model.crud import DOIQuery
@@ -107,14 +108,14 @@ class DOIPlugin(SingletonPlugin, toolkit.DefaultDatasetForm):
                     )
                     raise
                 log.info(f"DOI {doi.identifier} minted for package {package_id}")
-                toolkit.h.flash_success('DataCite DOI created')
+                flash_success_safe('DataCite DOI created', context)
             else:
                 same = client.check_for_update(doi.identifier, xml_dict)
                 if not same:
                     # Not the same, so we want to update the metadata
                     log.info(f"DOI {doi.identifier} metadata changed; updating")
                     client.set_metadata(doi.identifier, xml_dict)
-                    toolkit.h.flash_success('DataCite DOI metadata updated')
+                    flash_success_safe('DataCite DOI metadata updated', context)
                 else:
                     log.info(f"DOI {doi.identifier} metadata unchanged; no update needed")
 
